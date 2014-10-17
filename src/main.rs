@@ -62,9 +62,9 @@ fn pad_right(c:char, l:uint, str:String) -> String {
     let str_len = str.len();
     if l > str_len {
         let padding = replicate(String::from_chars([c]), l - str_len).concat();
-        let mut result = str.clone();
-        result.push_str(padding.as_slice());
-        result
+        let mut res = str.clone();
+        res.push_str(padding.as_slice());
+        res
     } else {
         str
     }
@@ -72,19 +72,19 @@ fn pad_right(c:char, l:uint, str:String) -> String {
 fn pad_left(c:char, l:uint, str:String) -> String {
     let str_len = str.len();
     if l > str_len {
-      let mut result = replicate(String::from_chars([c]), l - str_len).concat();
-      result.push_str(str.as_slice());
-      result
+      let mut res = replicate(String::from_chars([c]), l - str_len).concat();
+      res.push_str(str.as_slice());
+      res
     } else {
         str
     }
 }
 
-fn nlspace<S>(outs:(|S,String| -> S), s:S, i:uint) -> S {
+fn nlspace<S>(outs:|S,String| -> S, s:S, i:uint) -> S {
     outs(s, pad_right(' ', i + String::from_str("\n").len(), String::from_str("\n")))
 }
 
-fn spaces<S>(outs:(|S,String| -> S), s:S, i:uint) -> S {
+fn spaces<S>(outs:|S,String| -> S, s:S, i:uint) -> S {
     outs(s, pad_left(' ', i, String::from_str("")))
 }
 
@@ -123,8 +123,8 @@ fn fitting(xs:&Vec<(uint,mode::Mode,Doc)>, left:uint) -> bool {
     }
 }
 
-fn best<S:Clone>(w:uint, outs:(|S, String| -> S), s:S, x:Doc) -> S {
-    fn go<S:Clone>(w:uint, outs:(|S,String| -> S), s:S, k:uint, xs:Vec<(uint,mode::Mode,Doc)>) -> S {
+fn best<S:Clone>(w:uint, outs:|S, String| -> S, s:S, x:Doc) -> S {
+    fn go<S:Clone>(w:uint, outs:|S,String| -> S, s:S, k:uint, xs:Vec<(uint,mode::Mode,Doc)>) -> S {
         match xs.as_slice() {
             [] => s.clone(),
             [(ref i, ref mode, ref doc), ref rest..] => match doc {
