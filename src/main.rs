@@ -51,7 +51,7 @@ mod mode {
 }
 
 fn replicate<A:Clone>(x:A, l:uint) -> Vec<A> {
-    let mut i = 0u;
+    let i = 0u;
     let mut res = Vec::new();
     for _ in range(i,l) {
         res.push(x.clone());
@@ -60,18 +60,21 @@ fn replicate<A:Clone>(x:A, l:uint) -> Vec<A> {
 }
 fn pad_right(c:char, l:uint, str:String) -> String {
     let str_len = str.len();
-    if (l > str_len) {
-        let padding = replicate(String::from_str(" "), l - str_len).concat();
-        str.clone().append(padding.as_slice())
+    if l > str_len {
+        let padding = replicate(String::from_chars([c]), l - str_len).concat();
+        let mut result = str.clone();
+        result.push_str(padding.as_slice());
+        result
     } else {
         str
     }
 }
 fn pad_left(c:char, l:uint, str:String) -> String {
     let str_len = str.len();
-    if (l > str_len) {
-      let padding = replicate(String::from_str(" "), l - str_len).concat();
-      padding.append(str.as_slice())
+    if l > str_len {
+      let mut result = replicate(String::from_chars([c]), l - str_len).concat();
+      result.push_str(str.as_slice());
+      result
     } else {
         str
     }
