@@ -108,19 +108,6 @@ fn best(w:uint, s:Vec<String>, x:Doc) -> Vec<String> {
 }
 
 impl Doc {
-    pub fn nil() -> Doc {
-        Nil
-    }
-/*
- *
-    Append(Box<Doc>, Box<Doc>),
-    Nest(uint, Box<Doc>),
-    Text(String),
-    Break(uint, uint),
-    Newline,
-    Group(Box<Doc>)
-    */
-
     pub fn concat(ds:&[Doc]) -> Doc {
         ds.iter().fold(Nil, |a, b| a.append(b.clone()))
     }
