@@ -1,6 +1,9 @@
 #![allow(dead_code)]
 #![allow(unused_variable)]
 
+use pretty::mode;
+use pretty::string_utils;
+
 #[deriving(Show)]
 #[deriving(Clone)]
 pub enum Doc {
@@ -11,53 +14,6 @@ pub enum Doc {
     Break(uint, uint),
     Newline,
     Group(Box<Doc>)
-}
-
-mod mode {
-    #[deriving(Clone)]
-    pub enum Mode {
-        Flat,
-        Break
-    }
-}
-
-fn replicate<A:Clone>(x:A, l:uint) -> Vec<A> {
-    let i = 0u;
-    let mut res = Vec::new();
-    for _ in range(i,l) {
-        res.push(x.clone());
-    }
-    res
-}
-
-fn pad_right(c:char, l:uint, str:String) -> String {
-    let str_len = str.len();
-    if l > str_len {
-        let padding = replicate(String::from_chars([c]), l - str_len).concat();
-        let mut res = str.clone();
-        res.push_str(padding.as_slice());
-        res
-    } else {
-        str
-    }
-}
-fn pad_left(c:char, l:uint, str:String) -> String {
-    let str_len = str.len();
-    if l > str_len {
-      let mut res = replicate(String::from_chars([c]), l - str_len).concat();
-      res.push_str(str.as_slice());
-      res
-    } else {
-        str
-    }
-}
-
-fn nlspace(s:Vec<String>, i:uint) -> Vec<String> {
-    prepend(s, pad_right(' ', i + String::from_str("\n").len(), String::from_str("\n")))
-}
-
-fn spaces(s:Vec<String>, i:uint) -> Vec<String> {
-    prepend(s, pad_left(' ', i, String::from_str("")))
 }
 
 fn fitting(xs:&Vec<(uint,mode::Mode,Doc)>, left:uint) -> bool {
@@ -117,24 +73,12 @@ fn best(w:uint, s:Vec<String>, x:Doc) -> Vec<String> {
                     zs.push_all(*rest);
                     go(w, s, k, zs)
                 },
-                Text(ref str) => {
-                    let ss = prepend(s, str.clone());
-                    go(w, ss, k + str.len(), rest.to_vec())
-                },
-                Newline => {
-                    let ss = nlspace(s, *i);
-                    go(w, ss, *i, rest.to_vec())
-                },
+                Text(ref str) => go(w, prepend(s, str.clone()), k + str.len(), rest.to_vec()),
+                Newline => go(w, prepend(s, string_utils::nl_space(*i)), *i, rest.to_vec()),
                 Break(sp, off) => {
                     match *mode {
-                        mode::Flat => {
-                            let ss = spaces(s.clone(), sp);
-                            go(w, ss, k + sp, rest.to_vec())
-                        },
-                        mode::Break => {
-                            let ss = nlspace(s.clone(), i + off);
-                            go(w, ss, i + off, rest.to_vec())
-                        }
+                        mode::Flat => go(w, prepend(s.clone(), string_utils::spaces(sp)), k + sp, rest.to_vec()),
+                        mode::Break => go(w, prepend(s.clone(), string_utils::nl_space(i + off)), i + off, rest.to_vec())
                     }
                 },
                 Group(ref x) => {
@@ -164,6 +108,38 @@ fn best(w:uint, s:Vec<String>, x:Doc) -> Vec<String> {
 }
 
 impl Doc {
+    pub fn nil() -> Doc {
+        Nil
+    }
+/*
+ *
+    Append(Box<Doc>, Box<Doc>),
+    Nest(uint, Box<Doc>),
+    Text(String),
+    Break(uint, uint),
+    Newline,
+    Group(Box<Doc>)
+    */
+
+    pub fn concat(ds:&[Doc]) -> Doc {
+        ds.iter().fold(Nil, |a, b| a.append(b.clone()))
+    }
+
+    pub fn int(i:int) -> Doc {
+        Text(format!("{}", i))
+    }
+
+    pub fn char(c:char) -> Doc {
+        Text(format!("{}", c))
+    }
+
+    pub fn bool(b:bool) -> Doc {
+        if b {
+            Text(String::from_str("true"))
+        } else {
+            Text(String::from_str("false"))
+        }
+    }
     pub fn append(&self, e:Doc) -> Doc {
         match *self {
             Nil => e,
@@ -182,23 +158,4 @@ impl Doc {
     }
 }
 
-pub fn concat(ds:&[Doc]) -> Doc {
-    ds.iter().fold(Nil, |a, b| a.append(b.clone()))
-}
-
-pub fn int(i:int) -> Doc {
-    Text(format!("{}", i))
-}
-
-pub fn char(c:char) -> Doc {
-    Text(format!("{}", c))
-}
-
-pub fn bool(b:bool) -> Doc {
-    if b {
-        Text(String::from_str("true"))
-    } else {
-        Text(String::from_str("false"))
-    }
-}
 
