@@ -1,8 +1,8 @@
 #![allow(dead_code)]
 #![allow(unused_variable)]
 
-use pretty::mode;
-use pretty::string_utils;
+use super::mode;
+use super::string_utils;
 
 #[deriving(Show)]
 #[deriving(Clone)]
