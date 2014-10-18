@@ -13,38 +13,6 @@ pub enum Doc {
     Group(Box<Doc>)
 }
 
-impl Doc {
-    pub fn append(&self, e:Doc) -> Doc {
-        match self {
-            &Nil => e,
-            x => match e {
-                Nil => x.clone(),
-                y => Append(box x.clone(), box y)
-            }
-        }
-    }
-}
-
-fn concat(ds:&[Doc]) -> Doc {
-    ds.iter().fold(Nil, |a, b| Append(box a, box b.clone()))
-}
-
-fn int(i:int) -> Doc {
-    Text(format!("{}", i))
-}
-
-fn char(c:char) -> Doc {
-    Text(format!("{}", c))
-}
-
-fn bool(b:bool) -> Doc {
-    if b {
-        Text(String::from_str("true"))
-    } else {
-        Text(String::from_str("false"))
-    }
-}
-
 mod mode {
     #[deriving(Clone)]
     pub enum Mode {
@@ -61,6 +29,7 @@ fn replicate<A:Clone>(x:A, l:uint) -> Vec<A> {
     }
     res
 }
+
 fn pad_right(c:char, l:uint, str:String) -> String {
     let str_len = str.len();
     if l > str_len {
@@ -195,6 +164,16 @@ fn best(w:uint, s:Vec<String>, x:Doc) -> Vec<String> {
 }
 
 impl Doc {
+    pub fn append(&self, e:Doc) -> Doc {
+        match *self {
+            Nil => e,
+            ref x => match e {
+                Nil => x.clone(),
+                y => Append(box x.clone(), box y)
+            }
+        }
+    }
+
     pub fn to_string(&self, w:uint) -> String {
         let mut strs = best(w, [].to_vec(), self.clone());
         strs.reverse();
@@ -202,3 +181,24 @@ impl Doc {
         strs.concat()
     }
 }
+
+pub fn concat(ds:&[Doc]) -> Doc {
+    ds.iter().fold(Nil, |a, b| a.append(b.clone()))
+}
+
+pub fn int(i:int) -> Doc {
+    Text(format!("{}", i))
+}
+
+pub fn char(c:char) -> Doc {
+    Text(format!("{}", c))
+}
+
+pub fn bool(b:bool) -> Doc {
+    if b {
+        Text(String::from_str("true"))
+    } else {
+        Text(String::from_str("false"))
+    }
+}
+
