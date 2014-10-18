@@ -127,8 +127,8 @@ fn fitting(xs:&Vec<(uint,mode::Mode,Doc)>, left:uint) -> bool {
 }
 
 fn prepend<A:Clone>(v: Vec<A>, x:A) -> Vec<A> {
-    let mut res = [x].to_vec();
-    res.push_all(v.as_slice());
+    let mut res = v;
+    res.insert(0,x);
     res
 }
 
