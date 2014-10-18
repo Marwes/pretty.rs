@@ -6,7 +6,7 @@ use pretty::string_utils;
 
 #[deriving(Show)]
 #[deriving(Clone)]
-pub enum Doc {
+enum DOC {
     Nil,
     Append(Box<Doc>, Box<Doc>),
     Nest(uint, Box<Doc>),
@@ -15,6 +15,8 @@ pub enum Doc {
     Newline,
     Group(Box<Doc>)
 }
+
+pub type Doc = DOC;
 
 fn fitting(xs:&Vec<(uint,mode::Mode,Doc)>, left:uint) -> bool {
     if left as int >= 0 {
@@ -108,6 +110,41 @@ fn best(w:uint, s:Vec<String>, x:Doc) -> Vec<String> {
 }
 
 impl Doc {
+
+    pub fn nil() -> Doc {
+        Nil
+    }
+
+    pub fn append(&self, e:Doc) -> Doc {
+        match *self {
+            Nil => e,
+            ref x => match e {
+                Nil => x.clone(),
+                y => Append(box x.clone(), box y)
+            }
+        }
+    }
+
+    pub fn nest(&self, i:uint) -> Doc {
+        Nest(i, box self.clone())
+    }
+
+    pub fn text(str:String) -> Doc {
+        Text(str)
+    }
+
+    pub fn brk(space:uint, offset:uint) -> Doc {
+        Break(space, offset)
+    }
+
+    pub fn newline() -> Doc {
+        Newline
+    }
+
+    pub fn group(&self) -> Doc {
+        Group(box self.clone())
+    }
+
     pub fn concat(ds:&[Doc]) -> Doc {
         ds.iter().fold(Nil, |a, b| a.append(b.clone()))
     }
@@ -125,15 +162,6 @@ impl Doc {
             Text(String::from_str("true"))
         } else {
             Text(String::from_str("false"))
-        }
-    }
-    pub fn append(&self, e:Doc) -> Doc {
-        match *self {
-            Nil => e,
-            ref x => match e {
-                Nil => x.clone(),
-                y => Append(box x.clone(), box y)
-            }
         }
     }
 
