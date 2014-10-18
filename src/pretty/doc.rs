@@ -158,19 +158,15 @@ impl Doc {
     }
 
     pub fn bool(b:bool) -> Doc {
-        if b {
-            Text(String::from_str("true"))
-        } else {
-            Text(String::from_str("false"))
-        }
+        let res = if b { "true" } else { "false" };
+        Text(String::from_str(res))
     }
 
     pub fn to_string(&self, w:uint) -> String {
-        let mut strs = best(w, [].to_vec(), self.clone());
+        let mut strs = best(w, Vec::new(), self.clone());
         strs.reverse();
         strs.push(String::from_str("\n"));
         strs.concat()
     }
 }
-
 
