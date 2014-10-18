@@ -202,6 +202,3 @@ impl Doc {
         strs.concat()
     }
 }
-
-fn main() {
-}
