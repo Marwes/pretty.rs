@@ -9,5 +9,5 @@ name = "pretty"
 path = "src/pretty/lib.rs"
 
 [[bin]]
-name = "pretty"
-path = "src/bin/main.rs"
+name = "trees"
+path = "examples/trees.rs"
