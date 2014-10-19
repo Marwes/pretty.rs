@@ -8,7 +8,6 @@ use std::collections::Deque;
 enum DOC {
     Nil,
     Append(Box<Doc>, Box<Doc>),
-    Break(uint, uint),
     Group(Box<Doc>),
     Nest(uint, Box<Doc>),
     Newline,
@@ -42,14 +41,6 @@ fn fitting(xs:DList<(uint,mode::Mode,Doc)>, left:uint) -> bool {
             },
             Text(str) => {
                 fitting(tail, left - str.len())
-            },
-            Break(sp, _) => match mode {
-                mode::Flat => {
-                    fitting(tail, left - sp)
-                },
-                mode::Break => {
-                    true
-                },
             },
             Newline => {
                 true
@@ -97,20 +88,6 @@ fn best(w:uint, s:DList<String>, x:Doc) -> DList<String> {
                     prefix.push(util::string::nl_spaces(i));
                     s.prepend(prefix);
                     go(w, s, i, xs)
-                },
-                Break(sp, off) => match mode {
-                    mode::Flat => {
-                        let mut prefix = DList::new();
-                        prefix.push(util::string::spaces(sp));
-                        s.prepend(prefix);
-                        go(w, s, k + sp, xs)
-                    },
-                    mode::Break => {
-                        let mut prefix = DList::new();
-                        prefix.push(util::string::nl_spaces(i + off));
-                        s.prepend(prefix);
-                        go(w, s, i + off, xs)
-                    }
                 },
                 Group(ref x) => match mode {
                     mode::Flat => {
@@ -171,11 +148,6 @@ impl Doc {
 
     pub fn text<S:Str>(s:S) -> Doc {
         Text(String::from_str(s.as_slice()))
-    }
-
-    // FIXME: perhaps call it line_break?
-    pub fn brk(space:uint, offset:uint) -> Doc {
-        Break(space, offset)
     }
 
     pub fn newline() -> Doc {
