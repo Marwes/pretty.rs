@@ -22,12 +22,12 @@ fn fitting(xs:&Vec<(uint,mode::Mode,Doc)>, left:uint) -> bool {
             [(ref i, ref mode, ref doc), ref rest..] => match *doc {
                 Nil => fitting(&rest.to_vec(), left),
                 Append(ref x, ref y) => {
-                    let mut ys = [(*i,*mode,*x.clone()), (*i,*mode,*y.clone())].to_vec();
+                    let mut ys = [(*i, *mode, *x.clone()), (*i, *mode, *y.clone())].to_vec();
                     ys.push_all(*rest);
-                    fitting(&ys,left)
+                    fitting(&ys, left)
                 },
                 Nest(j, ref x) => {
-                    let mut ys = [(*i+j,*mode,*x.clone())].to_vec();
+                    let mut ys = [(*i + j, *mode, *x.clone())].to_vec();
                     ys.push_all(*rest);
                     fitting(&ys, left)
                 },
@@ -38,7 +38,7 @@ fn fitting(xs:&Vec<(uint,mode::Mode,Doc)>, left:uint) -> bool {
                 },
                 Newline => true,
                 Group(ref x) => {
-                    let mut ys = [(*i,*mode, *x.clone())].to_vec();
+                    let mut ys = [(*i, *mode, *x.clone())].to_vec();
                     ys.push_all(*rest);
                     fitting(&ys, left)
                 }
@@ -52,7 +52,7 @@ fn fitting(xs:&Vec<(uint,mode::Mode,Doc)>, left:uint) -> bool {
 
 fn prepend<A:Clone>(v: Vec<A>, x:A) -> Vec<A> {
     let mut res = v;
-    res.insert(0,x);
+    res.insert(0, x);
     res
 }
 
@@ -83,17 +83,17 @@ fn best(w:uint, s:Vec<String>, x:Doc) -> Vec<String> {
                 Group(ref x) => {
                     match *mode {
                         mode::Flat => {
-                            let mut zs = [(*i,mode::Flat,*x.clone())].to_vec();
+                            let mut zs = [(*i, mode::Flat, *x.clone())].to_vec();
                             zs.push_all(*rest);
                             go(w, s, k, zs)
                         },
                         mode::Break => {
-                            let mut ys = [(*i,mode::Flat,*x.clone())].to_vec();
+                            let mut ys = [(*i, mode::Flat, *x.clone())].to_vec();
                             ys.push_all(*rest);
                             if fitting(&ys, w - k) {
                                 go(w, s, k, ys)
                             } else {
-                                let mut zs = [(*i,mode::Break,*x.clone())].to_vec();
+                                let mut zs = [(*i, mode::Break, *x.clone())].to_vec();
                                 zs.push_all(*rest);
                                 go(w, s, k, zs)
                             }
@@ -103,7 +103,7 @@ fn best(w:uint, s:Vec<String>, x:Doc) -> Vec<String> {
             }
         }
     }
-    go(w, s, 0, [(0,mode::Break,x)].to_vec())
+    go(w, s, 0, [(0, mode::Break, x)].to_vec())
 }
 
 impl Doc {
