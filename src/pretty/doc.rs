@@ -15,32 +15,32 @@ enum DOC {
 
 pub type Doc = DOC;
 
-fn fitting(xs:&Vec<(uint,mode::Mode,Doc)>, left:uint) -> bool {
+fn fitting(xs:Vec<(uint,mode::Mode,Doc)>, left:uint) -> bool {
     if left as int >= 0 {
         match xs.as_slice() {
             [] => true,
             [(ref i, ref mode, ref doc), ref rest..] => match *doc {
-                Nil => fitting(&rest.to_vec(), left),
+                Nil => fitting(rest.to_vec(), left),
                 Append(ref x, ref y) => {
                     let mut ys = [(*i, *mode, *x.clone()), (*i, *mode, *y.clone())].to_vec();
                     ys.push_all(*rest);
-                    fitting(&ys, left)
+                    fitting(ys, left)
                 },
                 Nest(j, ref x) => {
                     let mut ys = [(*i + j, *mode, *x.clone())].to_vec();
                     ys.push_all(*rest);
-                    fitting(&ys, left)
+                    fitting(ys, left)
                 },
-                Text(ref str) => fitting(&rest.to_vec(), left - str.len()),
+                Text(ref str) => fitting(rest.to_vec(), left - str.len()),
                 Break(sp, _) => match *mode {
-                    mode::Flat => fitting(&rest.to_vec(), left - sp),
+                    mode::Flat => fitting(rest.to_vec(), left - sp),
                     mode::Break => true
                 },
                 Newline => true,
                 Group(ref x) => {
                     let mut ys = [(*i, *mode, *x.clone())].to_vec();
                     ys.push_all(*rest);
-                    fitting(&ys, left)
+                    fitting(ys, left)
                 }
             }
         }
@@ -90,7 +90,7 @@ fn best(w:uint, s:Vec<String>, x:Doc) -> Vec<String> {
                         mode::Break => {
                             let mut ys = [(*i, mode::Flat, *x.clone())].to_vec();
                             ys.push_all(*rest);
-                            if fitting(&ys, w - k) {
+                            if fitting(ys.clone(), w - k) {
                                 go(w, s, k, ys)
                             } else {
                                 let mut zs = [(*i, mode::Break, *x.clone())].to_vec();
