@@ -1,19 +1,16 @@
+use std::iter::Repeat;
+
 fn replicate<A:Clone>(x:A, l:uint) -> Vec<A> {
-    let i = 0u;
-    let mut res = Vec::new();
-    for _ in range(i,l) {
-        res.push(x.clone());
-    }
-    res
+    FromIterator::from_iter(Repeat::new(x).take(l))
 }
 
-fn pad_right(c:char, l:uint, str:String) -> String {
+fn pad_right(c:char, l:uint, mut str:String) -> String {
     let str_len = str.len();
     if l > str_len {
         let padding = replicate(String::from_chars([c]), l - str_len).concat();
-        let mut res = str.clone();
-        res.push_str(padding.as_slice());
-        res
+        // let mut res = str.clone();
+        str.push_str(padding.as_slice());
+        str
     } else {
         str
     }
@@ -37,4 +34,3 @@ pub fn nl_space(i:uint) -> String {
 pub fn spaces(i:uint) -> String {
     pad_left(' ', i, String::from_str(""))
 }
-
