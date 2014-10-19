@@ -25,7 +25,7 @@ impl<'a> Tree<'a> {
             [ref t] => t.pretty(),
             [ref t, ref ts..] => {
                 t.pretty().append(
-                    Doc::str(",")
+                    Doc::text(",")
                 ).append(
                     Doc::newline()
                 ).append(
@@ -39,14 +39,14 @@ impl<'a> Tree<'a> {
         match ts {
             [] => Doc::nil(),
             ts => {
-                Doc::str("[").append(
+                Doc::text("[").append(
                     Doc::newline().append(
                         Tree::pretty_trees(ts)
                     ).nest(2)
                 ).append(
                     Doc::newline()
                 ).append(
-                    Doc::str("]")
+                    Doc::text("]")
                 )
             }
         }
@@ -78,4 +78,3 @@ pub fn main() {
 
     print!("{}", example.pretty().to_string(70));
 }
-

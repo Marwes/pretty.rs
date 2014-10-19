@@ -126,12 +126,8 @@ impl Doc {
         Nest(i, box self)
     }
 
-    pub fn text(str:String) -> Doc {
-        Text(str)
-    }
-
-    pub fn str(str:&str) -> Doc {
-        Text(String::from_str(str))
+    pub fn text<S:Str>(s:S) -> Doc {
+        Text(String::from_str(s.as_slice()))
     }
 
     pub fn brk(space:uint, offset:uint) -> Doc {
