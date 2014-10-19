@@ -148,6 +148,7 @@ impl Doc {
         Text(String::from_str(s.as_slice()))
     }
 
+    // FIXME: perhaps call it line_break?
     pub fn brk(space:uint, offset:uint) -> Doc {
         Break(space, offset)
     }
@@ -164,11 +165,11 @@ impl Doc {
         ds.iter().fold(Nil, |a, b| a.append(b.clone()))
     }
 
-    pub fn as_str<T:ToString>(t:T) -> Doc {
+    pub fn as_string<T:ToString>(t:T) -> Doc {
         Doc::text(t.to_string())
     }
 
-    pub fn to_string(self, w:uint) -> String {
+    pub fn render(self, w:uint) -> String {
         let mut strs = best(w, Vec::new(), self);
         strs.reverse();
         strs.push(String::from_str("\n"));

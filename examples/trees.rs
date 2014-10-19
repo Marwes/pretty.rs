@@ -76,5 +76,5 @@ pub fn main() {
 
     let example = Tree::new("aaa", aaas);
 
-    print!("{}", example.pretty().to_string(70));
+    print!("{}", example.pretty().render(70));
 }
