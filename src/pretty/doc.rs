@@ -20,24 +20,24 @@ fn fitting(xs:Vec<(uint,mode::Mode,Doc)>, left:uint) -> bool {
         [] => {
             true
         },
-        [(ref i, ref mode, ref doc), ref rest..] => match *doc {
+        [(i, mode, ref doc), rest..] => match doc.clone() {
             Nil => {
                 fitting(rest.to_vec(), left)
             },
-            Append(ref x, ref y) => {
-                let mut ys = [(*i, *mode, *x.clone()), (*i, *mode, *y.clone())].to_vec();
-                ys.push_all(*rest);
+            Append(box x, box y) => {
+                let mut ys = [(i, mode, x), (i, mode, y)].to_vec();
+                ys.push_all(rest);
                 fitting(ys, left)
             },
-            Nest(j, ref x) => {
-                let mut ys = [(*i + j, *mode, *x.clone())].to_vec();
-                ys.push_all(*rest);
+            Nest(j, box x) => {
+                let mut ys = [(i + j, mode, x)].to_vec();
+                ys.push_all(rest);
                 fitting(ys, left)
             },
-            Text(ref str) => {
+            Text(str) => {
                 fitting(rest.to_vec(), left - str.len())
             },
-            Break(sp, _) => match *mode {
+            Break(sp, _) => match mode {
                 mode::Flat => {
                     fitting(rest.to_vec(), left - sp)
                 },
@@ -48,9 +48,9 @@ fn fitting(xs:Vec<(uint,mode::Mode,Doc)>, left:uint) -> bool {
             Newline => {
                 true
             },
-            Group(ref x) => {
-                let mut ys = [(*i, *mode, *x.clone())].to_vec();
-                ys.push_all(*rest);
+            Group(box x) => {
+                let mut ys = [(i, mode, x)].to_vec();
+                ys.push_all(rest);
                 fitting(ys, left)
             },
         }
@@ -66,52 +66,52 @@ fn prepend<A:Clone>(v: Vec<A>, x:A) -> Vec<A> {
 fn best(w:uint, s:Vec<String>, x:Doc) -> Vec<String> {
     fn go(w:uint, s:Vec<String>, k:uint, xs:Vec<(uint,mode::Mode,Doc)>) -> Vec<String> {
         match xs.as_slice() {
-            [] => s.clone(),
-            [(ref i, ref mode, ref doc), ref rest..] => match *doc {
+            [] => s,
+            [(i, mode, ref doc), rest..] => match doc.clone() {
                 Nil => {
                     go(w, s, k, rest.to_vec())
                 },
-                Append(ref x, ref y) => {
-                    let mut zs = [(*i, *mode, *x.clone()), (*i, *mode, *y.clone())].to_vec();
-                    zs.push_all(*rest);
+                Append(box x, box y) => {
+                    let mut zs = [(i, mode, x), (i, mode, y)].to_vec();
+                    zs.push_all(rest);
                     go(w, s, k, zs)
                 },
-                Nest(j, ref x) => {
-                    let mut zs = [(*i + j, *mode, *x.clone())].to_vec();
-                    zs.push_all(*rest);
+                Nest(j, box x) => {
+                    let mut zs = [(i + j, mode, x)].to_vec();
+                    zs.push_all(rest);
                     go(w, s, k, zs)
                 },
-                Text(ref str) => {
+                Text(str) => {
                     go(w, prepend(s, str.clone()), k + str.len(), rest.to_vec())
                 },
                 Newline => {
-                    go(w, prepend(s, string_utils::nl_space(*i)), *i, rest.to_vec())
+                    go(w, prepend(s, string_utils::nl_space(i)), i, rest.to_vec())
                 },
                 Break(sp, off) => {
-                    match *mode {
+                    match mode {
                         mode::Flat => {
-                            go(w, prepend(s.clone(), string_utils::spaces(sp)), k + sp, rest.to_vec())
+                            go(w, prepend(s, string_utils::spaces(sp)), k + sp, rest.to_vec())
                         },
                         mode::Break => {
-                            go(w, prepend(s.clone(), string_utils::nl_space(i + off)), i + off, rest.to_vec())
+                            go(w, prepend(s, string_utils::nl_space(i + off)), i + off, rest.to_vec())
                         }
                     }
                 },
-                Group(ref x) => {
-                    match *mode {
+                Group(box x) => {
+                    match mode {
                         mode::Flat => {
-                            let mut zs = [(*i, mode::Flat, *x.clone())].to_vec();
-                            zs.push_all(*rest);
+                            let mut zs = [(i, mode::Flat, x)].to_vec();
+                            zs.push_all(rest);
                             go(w, s, k, zs)
                         },
                         mode::Break => {
-                            let mut ys = [(*i, mode::Flat, *x.clone())].to_vec();
-                            ys.push_all(*rest);
+                            let mut ys = [(i, mode::Flat, x.clone())].to_vec();
+                            ys.push_all(rest);
                             if fitting(ys.clone(), w - k) {
                                 go(w, s, k, ys)
                             } else {
-                                let mut zs = [(*i, mode::Break, *x.clone())].to_vec();
-                                zs.push_all(*rest);
+                                let mut zs = [(i, mode::Break, x)].to_vec();
+                                zs.push_all(rest);
                                 go(w, s, k, zs)
                             }
                         }
