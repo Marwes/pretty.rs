@@ -16,18 +16,15 @@ enum DOC {
 
 pub type Doc = DOC;
 
-fn fitting(xs:&mut DList<(uint,mode::Mode,Doc)>, initial_left:int) -> bool {
+fn fitting(cmds: &mut DList<(uint,mode::Mode,Doc)>, mut rem:int) -> bool {
     let mut fits = true;
 
-    let mut left = initial_left;
-
     loop {
-        if left < 0 {
+        if rem < 0 {
             fits = false;
             break;
         }
-
-        match xs.pop_front() {
+        match cmds.pop_front() {
             None => {
                 break;
             },
@@ -37,15 +34,15 @@ fn fitting(xs:&mut DList<(uint,mode::Mode,Doc)>, initial_left:int) -> bool {
                     let mut prefix = DList::new();
                     prefix.push((i, mode, x));
                     prefix.push((i, mode, y));
-                    xs.prepend(prefix);
+                    cmds.prepend(prefix);
                 },
                 Nest(j, box x) => {
                     let mut prefix = DList::new();
                     prefix.push((i + j, mode, x));
-                    xs.prepend(prefix);
+                    cmds.prepend(prefix);
                 },
                 Text(str) => {
-                    left -= str.len() as int;
+                    rem -= str.len() as int;
                 },
                 Newline => {
                     fits = true;
@@ -53,7 +50,7 @@ fn fitting(xs:&mut DList<(uint,mode::Mode,Doc)>, initial_left:int) -> bool {
                 Group(box x) => {
                     let mut prefix = DList::new();
                     prefix.push((i, mode, x));
-                    xs.prepend(prefix);
+                    cmds.prepend(prefix);
                 },
             }
         }
@@ -62,16 +59,14 @@ fn fitting(xs:&mut DList<(uint,mode::Mode,Doc)>, initial_left:int) -> bool {
     fits
 }
 
+fn best(width:uint, mut buf:DList<String>, x:Doc) -> DList<String> {
+    let mut pos: uint = 0;
+    let mut cmds: DList<(uint,mode::Mode,Doc)> = DList::new();
 
-fn best(w:uint, s:DList<String>, x:Doc) -> DList<String> {
-    let mut start = DList::new();
-    start.push((0u, mode::Break, x.clone()));
-
-    let mut result = s.clone();
-    let mut k = 0u;
+    cmds.push((0, mode::Break, x));
 
     loop {
-        match start.pop_front() {
+        match cmds.pop_front() {
             None => {
                 break;
             },
@@ -81,44 +76,44 @@ fn best(w:uint, s:DList<String>, x:Doc) -> DList<String> {
                     let mut prefix = DList::new();
                     prefix.push((i, mode, x));
                     prefix.push((i, mode, y));
-                    start.prepend(prefix);
+                    cmds.prepend(prefix);
                 },
                 Nest(j, box x) => {
                     let mut prefix = DList::new();
                     prefix.push((i + j, mode, x));
-                    start.prepend(prefix);
+                    cmds.prepend(prefix);
                 },
                 Text(str) => {
                     let mut prefix = DList::new();
                     prefix.push(str.clone());
-                    result.prepend(prefix);
-                    k += str.len();
+                    buf.prepend(prefix);
+                    pos += str.len();
                 },
                 Newline => {
                     let mut prefix = DList::new();
                     prefix.push(util::string::nl_spaces(i));
-                    result.prepend(prefix);
-                    k = i;
+                    buf.prepend(prefix);
+                    pos = i;
                 },
                 Group(ref x) => match mode {
                     mode::Flat => {
                         let mut prefix = DList::new();
                         prefix.push((i, mode::Flat, *x.clone()));
-                        start.prepend(prefix);
+                        cmds.prepend(prefix);
                     },
                     mode::Break => {
-                        let mut ys = start.clone();
+                        let mut cmds_dup = cmds.clone();
                         let mut flat_prefix = DList::new();
                         flat_prefix.push((i, mode::Flat, *x.clone()));
-                        ys.prepend(flat_prefix);
-                        if fitting(&mut ys, w as int - k as int) {
+                        cmds_dup.prepend(flat_prefix);
+                        if fitting(&mut cmds_dup, width as int - pos as int) {
                             let mut prefix = DList::new();
                             prefix.push((i, mode::Flat, *x.clone()));
-                            start.prepend(prefix);
+                            cmds.prepend(prefix);
                         } else {
                             let mut prefix = DList::new();
                             prefix.push((i, mode::Break, *x.clone()));
-                            start.prepend(prefix);
+                            cmds.prepend(prefix);
                         }
                     }
                 }
@@ -126,7 +121,7 @@ fn best(w:uint, s:DList<String>, x:Doc) -> DList<String> {
         }
     }
 
-    result
+    buf
 }
 
 impl Doc {
