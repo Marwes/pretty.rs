@@ -146,17 +146,8 @@ impl Doc {
         ds.iter().fold(Nil, |a, b| a.append(b.clone()))
     }
 
-    pub fn int(i:int) -> Doc {
-        Text(format!("{}", i))
-    }
-
-    pub fn char(c:char) -> Doc {
-        Text(format!("{}", c))
-    }
-
-    pub fn bool(b:bool) -> Doc {
-        let res = if b { "true" } else { "false" };
-        Text(String::from_str(res))
+    pub fn as_str<T:ToString>(t:T) -> Doc {
+        Doc::text(t.to_string())
     }
 
     pub fn to_string(self, w:uint) -> String {
