@@ -1,8 +1,8 @@
 use super::mode;
 use super::string_utils;
 
-#[deriving(Show)]
 #[deriving(Clone)]
+#[deriving(Show)]
 enum DOC {
     Nil,
     Append(Box<Doc>, Box<Doc>),
