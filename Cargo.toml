@@ -1,6 +1,6 @@
 [package]
 
-name = "rust-pretty"
+name = "pretty"
 version = "0.0.1"
 authors = ["Jonathan Sterling <jon@jonmsterling.com>"]
 
