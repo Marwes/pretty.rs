@@ -1,6 +1,6 @@
 extern crate pretty;
 
-use pretty::doc::doc::{
+use pretty::doc::{
     Doc
 };
 
