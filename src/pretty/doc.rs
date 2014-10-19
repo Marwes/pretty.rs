@@ -16,49 +16,44 @@ enum DOC {
 pub type Doc = DOC;
 
 fn fitting(xs:Vec<(uint,mode::Mode,Doc)>, left:uint) -> bool {
-    if left as int >= 0 {
-        match xs.as_slice() {
-            [] => {
-                true
+    match xs.as_slice() {
+        [] => {
+            true
+        },
+        [(ref i, ref mode, ref doc), ref rest..] => match *doc {
+            Nil => {
+                fitting(rest.to_vec(), left)
             },
-            [(ref i, ref mode, ref doc), ref rest..] => match *doc {
-                Nil => {
-                    fitting(rest.to_vec(), left)
+            Append(ref x, ref y) => {
+                let mut ys = [(*i, *mode, *x.clone()), (*i, *mode, *y.clone())].to_vec();
+                ys.push_all(*rest);
+                fitting(ys, left)
+            },
+            Nest(j, ref x) => {
+                let mut ys = [(*i + j, *mode, *x.clone())].to_vec();
+                ys.push_all(*rest);
+                fitting(ys, left)
+            },
+            Text(ref str) => {
+                fitting(rest.to_vec(), left - str.len())
+            },
+            Break(sp, _) => match *mode {
+                mode::Flat => {
+                    fitting(rest.to_vec(), left - sp)
                 },
-                Append(ref x, ref y) => {
-                    let mut ys = [(*i, *mode, *x.clone()), (*i, *mode, *y.clone())].to_vec();
-                    ys.push_all(*rest);
-                    fitting(ys, left)
-                },
-                Nest(j, ref x) => {
-                    let mut ys = [(*i + j, *mode, *x.clone())].to_vec();
-                    ys.push_all(*rest);
-                    fitting(ys, left)
-                },
-                Text(ref str) => {
-                    fitting(rest.to_vec(), left - str.len())
-                },
-                Break(sp, _) => match *mode {
-                    mode::Flat => {
-                        fitting(rest.to_vec(), left - sp)
-                    },
-                    mode::Break => {
-                        true
-                    },
-                },
-                Newline => {
+                mode::Break => {
                     true
                 },
-                Group(ref x) => {
-                    let mut ys = [(*i, *mode, *x.clone())].to_vec();
-                    ys.push_all(*rest);
-                    fitting(ys, left)
-                },
-            }
+            },
+            Newline => {
+                true
+            },
+            Group(ref x) => {
+                let mut ys = [(*i, *mode, *x.clone())].to_vec();
+                ys.push_all(*rest);
+                fitting(ys, left)
+            },
         }
-    }
-    else {
-        false
     }
 }
 
