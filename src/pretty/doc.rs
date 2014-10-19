@@ -1,6 +1,3 @@
-#![allow(dead_code)]
-#![allow(unused_variable)]
-
 use super::mode;
 use super::string_utils;
 
@@ -173,4 +170,3 @@ impl Doc {
         strs.concat()
     }
 }
-
