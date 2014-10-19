@@ -6,11 +6,11 @@ use super::string_utils;
 enum DOC {
     Nil,
     Append(Box<Doc>, Box<Doc>),
-    Nest(uint, Box<Doc>),
-    Text(String),
     Break(uint, uint),
+    Group(Box<Doc>),
+    Nest(uint, Box<Doc>),
     Newline,
-    Group(Box<Doc>)
+    Text(String),
 }
 
 pub type Doc = DOC;
@@ -18,9 +18,13 @@ pub type Doc = DOC;
 fn fitting(xs:Vec<(uint,mode::Mode,Doc)>, left:uint) -> bool {
     if left as int >= 0 {
         match xs.as_slice() {
-            [] => true,
+            [] => {
+                true
+            },
             [(ref i, ref mode, ref doc), ref rest..] => match *doc {
-                Nil => fitting(rest.to_vec(), left),
+                Nil => {
+                    fitting(rest.to_vec(), left)
+                },
                 Append(ref x, ref y) => {
                     let mut ys = [(*i, *mode, *x.clone()), (*i, *mode, *y.clone())].to_vec();
                     ys.push_all(*rest);
@@ -31,17 +35,25 @@ fn fitting(xs:Vec<(uint,mode::Mode,Doc)>, left:uint) -> bool {
                     ys.push_all(*rest);
                     fitting(ys, left)
                 },
-                Text(ref str) => fitting(rest.to_vec(), left - str.len()),
-                Break(sp, _) => match *mode {
-                    mode::Flat => fitting(rest.to_vec(), left - sp),
-                    mode::Break => true
+                Text(ref str) => {
+                    fitting(rest.to_vec(), left - str.len())
                 },
-                Newline => true,
+                Break(sp, _) => match *mode {
+                    mode::Flat => {
+                        fitting(rest.to_vec(), left - sp)
+                    },
+                    mode::Break => {
+                        true
+                    },
+                },
+                Newline => {
+                    true
+                },
                 Group(ref x) => {
                     let mut ys = [(*i, *mode, *x.clone())].to_vec();
                     ys.push_all(*rest);
                     fitting(ys, left)
-                }
+                },
             }
         }
     }
@@ -61,7 +73,9 @@ fn best(w:uint, s:Vec<String>, x:Doc) -> Vec<String> {
         match xs.as_slice() {
             [] => s.clone(),
             [(ref i, ref mode, ref doc), ref rest..] => match *doc {
-                Nil => go(w, s, k, rest.to_vec()),
+                Nil => {
+                    go(w, s, k, rest.to_vec())
+                },
                 Append(ref x, ref y) => {
                     let mut zs = [(*i, *mode, *x.clone()), (*i, *mode, *y.clone())].to_vec();
                     zs.push_all(*rest);
@@ -72,12 +86,20 @@ fn best(w:uint, s:Vec<String>, x:Doc) -> Vec<String> {
                     zs.push_all(*rest);
                     go(w, s, k, zs)
                 },
-                Text(ref str) => go(w, prepend(s, str.clone()), k + str.len(), rest.to_vec()),
-                Newline => go(w, prepend(s, string_utils::nl_space(*i)), *i, rest.to_vec()),
+                Text(ref str) => {
+                    go(w, prepend(s, str.clone()), k + str.len(), rest.to_vec())
+                },
+                Newline => {
+                    go(w, prepend(s, string_utils::nl_space(*i)), *i, rest.to_vec())
+                },
                 Break(sp, off) => {
                     match *mode {
-                        mode::Flat => go(w, prepend(s.clone(), string_utils::spaces(sp)), k + sp, rest.to_vec()),
-                        mode::Break => go(w, prepend(s.clone(), string_utils::nl_space(i + off)), i + off, rest.to_vec())
+                        mode::Flat => {
+                            go(w, prepend(s.clone(), string_utils::spaces(sp)), k + sp, rest.to_vec())
+                        },
+                        mode::Break => {
+                            go(w, prepend(s.clone(), string_utils::nl_space(i + off)), i + off, rest.to_vec())
+                        }
                     }
                 },
                 Group(ref x) => {
