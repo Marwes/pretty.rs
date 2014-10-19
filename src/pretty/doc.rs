@@ -1,5 +1,7 @@
 use super::mode;
-use super::string_utils;
+use super::util;
+use std::collections::DList;
+use std::collections::Deque;
 
 #[deriving(Clone)]
 #[deriving(Show)]
@@ -15,31 +17,35 @@ enum DOC {
 
 pub type Doc = DOC;
 
-fn fitting(xs:Vec<(uint,mode::Mode,Doc)>, left:uint) -> bool {
-    match xs.as_slice() {
-        [] => {
+fn fitting(xs:DList<(uint,mode::Mode,Doc)>, left:uint) -> bool {
+    let mut tail = xs.clone();
+    match tail.pop_front() {
+        None => {
             true
         },
-        [(i, mode, ref doc), rest..] => match doc.clone() {
+        Some((i, mode, ref doc)) => match doc.clone() {
             Nil => {
-                fitting(rest.to_vec(), left)
+                fitting(tail, left)
             },
             Append(box x, box y) => {
-                let mut ys = vec![(i, mode, x), (i, mode, y)];
-                ys.push_all(rest);
-                fitting(ys, left)
+                let mut prefix = DList::new();
+                prefix.push((i, mode, x));
+                prefix.push((i, mode, y));
+                tail.prepend(prefix);
+                fitting(tail, left)
             },
             Nest(j, box x) => {
-                let mut ys = vec![(i + j, mode, x)];
-                ys.push_all(rest);
-                fitting(ys, left)
+                let mut prefix = DList::new();
+                prefix.push((i + j, mode, x));
+                tail.prepend(prefix);
+                fitting(tail, left)
             },
             Text(str) => {
-                fitting(rest.to_vec(), left - str.len())
+                fitting(tail, left - str.len())
             },
             Break(sp, _) => match mode {
                 mode::Flat => {
-                    fitting(rest.to_vec(), left - sp)
+                    fitting(tail, left - sp)
                 },
                 mode::Break => {
                     true
@@ -49,78 +55,98 @@ fn fitting(xs:Vec<(uint,mode::Mode,Doc)>, left:uint) -> bool {
                 true
             },
             Group(box x) => {
-                let mut ys = vec![(i, mode, x)];
-                ys.push_all(rest);
-                fitting(ys, left)
+                let mut prefix = DList::new();
+                prefix.push((i, mode, x));
+                tail.prepend(prefix);
+                fitting(tail, left)
             },
         }
     }
 }
 
-fn prepend<A:Clone>(mut v: Vec<A>, x:A) -> Vec<A> {
-    // let mut res = v;
-    v.insert(0, x);
-    v
-}
 
-fn best(w:uint, s:Vec<String>, x:Doc) -> Vec<String> {
-    fn go(w:uint, s:Vec<String>, k:uint, xs:Vec<(uint,mode::Mode,Doc)>) -> Vec<String> {
-        match xs.as_slice() {
-            [] => s,
-            [(i, mode, ref doc), rest..] => match doc.clone() {
+fn best(w:uint, s:DList<String>, x:Doc) -> DList<String> {
+    fn go(w:uint, s:&mut DList<String>, k:uint, xs:&mut DList<(uint,mode::Mode,Doc)>) {
+        match xs.pop_front() {
+            None => {},
+            Some((i, mode, ref doc)) => match doc.clone() {
                 Nil => {
-                    go(w, s, k, rest.to_vec())
+                    go(w, s, k, xs)
                 },
                 Append(box x, box y) => {
-                    let mut zs = vec![(i, mode, x), (i, mode, y)];
-                    zs.push_all(rest);
-                    go(w, s, k, zs)
+                    let mut prefix = DList::new();
+                    prefix.push((i, mode, x));
+                    prefix.push((i, mode, y));
+                    xs.prepend(prefix);
+                    go(w, s, k, xs)
                 },
                 Nest(j, box x) => {
-                    let mut zs = vec![(i + j, mode, x)];
-                    zs.push_all(rest);
-                    go(w, s, k, zs)
+                    let mut prefix = DList::new();
+                    prefix.push((i + j, mode, x));
+                    xs.prepend(prefix);
+                    go(w, s, k, xs)
                 },
                 Text(str) => {
-                    go(w, prepend(s, str.clone()), k + str.len(), rest.to_vec())
+                    let mut prefix = DList::new();
+                    prefix.push(str.clone());
+                    s.prepend(prefix);
+                    go(w, s, k + str.len(), xs)
                 },
                 Newline => {
-                    go(w, prepend(s, string_utils::nl_space(i)), i, rest.to_vec())
+                    let mut prefix = DList::new();
+                    prefix.push(util::string::nl_spaces(i));
+                    s.prepend(prefix);
+                    go(w, s, i, xs)
                 },
-                Break(sp, off) => {
-                    match mode {
-                        mode::Flat => {
-                            go(w, prepend(s, string_utils::spaces(sp)), k + sp, rest.to_vec())
-                        },
-                        mode::Break => {
-                            go(w, prepend(s, string_utils::nl_space(i + off)), i + off, rest.to_vec())
-                        }
+                Break(sp, off) => match mode {
+                    mode::Flat => {
+                        let mut prefix = DList::new();
+                        prefix.push(util::string::spaces(sp));
+                        s.prepend(prefix);
+                        go(w, s, k + sp, xs)
+                    },
+                    mode::Break => {
+                        let mut prefix = DList::new();
+                        prefix.push(util::string::nl_spaces(i + off));
+                        s.prepend(prefix);
+                        go(w, s, i + off, xs)
                     }
                 },
-                Group(box x) => {
-                    match mode {
-                        mode::Flat => {
-                            let mut zs = vec![(i, mode::Flat, x)];
-                            zs.push_all(rest);
-                            go(w, s, k, zs)
-                        },
-                        mode::Break => {
-                            let mut ys = vec![(i, mode::Flat, x.clone())];
-                            ys.push_all(rest);
-                            if fitting(ys.clone(), w - k) {
-                                go(w, s, k, ys)
-                            } else {
-                                let mut zs = vec![(i, mode::Break, x)];
-                                zs.push_all(rest);
-                                go(w, s, k, zs)
-                            }
+                Group(ref x) => match mode {
+                    mode::Flat => {
+                        let mut prefix = DList::new();
+                        prefix.push((i, mode::Flat, *x.clone()));
+                        xs.prepend(prefix);
+                        go(w, s, k, xs)
+                    },
+                    mode::Break => {
+                        let mut ys = xs.clone();
+                        let mut flat_prefix = DList::new();
+                        flat_prefix.push((i, mode::Flat, *x.clone()));
+                        ys.prepend(flat_prefix);
+                        if fitting(ys, w - k) {
+                            let mut prefix = DList::new();
+                            prefix.push((i, mode::Flat, *x.clone()));
+                            xs.prepend(prefix);
+                            go(w, s, k, xs)
+                        } else {
+                            let mut prefix = DList::new();
+                            prefix.push((i, mode::Break, *x.clone()));
+                            xs.prepend(prefix);
+                            go(w, s, k, xs)
                         }
                     }
                 }
             }
         }
     }
-    go(w, s, 0, vec![(0, mode::Break, x)])
+
+    let mut start = DList::new();
+    start.push((0, mode::Break, x));
+
+    let mut result = s.clone();
+    go(w, &mut result, 0, &mut start);
+    result
 }
 
 impl Doc {
@@ -147,6 +173,7 @@ impl Doc {
         Text(String::from_str(s.as_slice()))
     }
 
+    // FIXME: perhaps call it line_break?
     pub fn brk(space:uint, offset:uint) -> Doc {
         Break(space, offset)
     }
@@ -163,14 +190,17 @@ impl Doc {
         ds.iter().fold(Nil, |a, b| a.append(b.clone()))
     }
 
-    pub fn as_str<T:ToString>(t:T) -> Doc {
+    pub fn as_string<T:ToString>(t:T) -> Doc {
         Doc::text(t.to_string())
     }
 
-    pub fn to_string(self, w:uint) -> String {
-        let mut strs = best(w, Vec::new(), self);
-        strs.reverse();
-        strs.push(String::from_str("\n"));
-        strs.concat()
+    pub fn render(self, w:uint) -> String {
+        let strs = best(w, DList::new(), self);
+
+        let mut result = String::new();
+        for str in strs.iter().rev() {
+            result.push_str(str.as_slice());
+        }
+        result
     }
 }
