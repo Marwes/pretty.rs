@@ -1,5 +1,5 @@
 use super::mode;
-use super::string_utils;
+use super::util;
 
 #[deriving(Clone)]
 #[deriving(Show)]
@@ -85,15 +85,18 @@ fn best(w:uint, s:Vec<String>, x:Doc) -> Vec<String> {
                     go(w, prepend(s, str.clone()), k + str.len(), rest.to_vec())
                 },
                 Newline => {
-                    go(w, prepend(s, string_utils::nl_space(i)), i, rest.to_vec())
+                    let wspace = util::string::nl_spaces(i);
+                    go(w, prepend(s, wspace), i, rest.to_vec())
                 },
                 Break(sp, off) => {
                     match mode {
                         mode::Flat => {
-                            go(w, prepend(s, string_utils::spaces(sp)), k + sp, rest.to_vec())
+                            let wspace = util::string::spaces(sp);
+                            go(w, prepend(s, wspace), k + sp, rest.to_vec())
                         },
                         mode::Break => {
-                            go(w, prepend(s, string_utils::nl_space(i + off)), i + off, rest.to_vec())
+                            let wspace = util::string::nl_spaces(i + off);
+                            go(w, prepend(s, wspace), i + off, rest.to_vec())
                         }
                     }
                 },
