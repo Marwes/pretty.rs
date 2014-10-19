@@ -57,12 +57,6 @@ fn fitting(xs:Vec<(uint,mode::Mode,Doc)>, left:uint) -> bool {
     }
 }
 
-fn prepend<A:Clone>(mut v: Vec<A>, x:A) -> Vec<A> {
-    // let mut res = v;
-    v.insert(0, x);
-    v
-}
-
 fn best(w:uint, s:Vec<String>, x:Doc) -> Vec<String> {
     fn go(w:uint, s:Vec<String>, k:uint, xs:Vec<(uint,mode::Mode,Doc)>) -> Vec<String> {
         match xs.as_slice() {
@@ -82,21 +76,25 @@ fn best(w:uint, s:Vec<String>, x:Doc) -> Vec<String> {
                     go(w, s, k, zs)
                 },
                 Text(str) => {
-                    go(w, prepend(s, str.clone()), k + str.len(), rest.to_vec())
+                    let s = util::vec::prepend(s, str.clone());
+                    go(w, s, k + str.len(), rest.to_vec())
                 },
                 Newline => {
                     let wspace = util::string::nl_spaces(i);
-                    go(w, prepend(s, wspace), i, rest.to_vec())
+                    let s = util::vec::prepend(s, wspace);
+                    go(w, s, i, rest.to_vec())
                 },
                 Break(sp, off) => {
                     match mode {
                         mode::Flat => {
                             let wspace = util::string::spaces(sp);
-                            go(w, prepend(s, wspace), k + sp, rest.to_vec())
+                            let s = util::vec::prepend(s, wspace);
+                            go(w, s, k + sp, rest.to_vec())
                         },
                         mode::Break => {
                             let wspace = util::string::nl_spaces(i + off);
-                            go(w, prepend(s, wspace), i + off, rest.to_vec())
+                            let s = util::vec::prepend(s, wspace);
+                            go(w, s, i + off, rest.to_vec())
                         }
                     }
                 },
