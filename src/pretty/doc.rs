@@ -1,5 +1,5 @@
 use super::mode;
-use super::string_utils;
+use super::util;
 use std::collections::DList;
 use std::collections::Deque;
 
@@ -64,12 +64,11 @@ fn fitting(xs:DList<(uint,mode::Mode,Doc)>, left:uint) -> bool {
     }
 }
 
-fn best(w:uint, s:DList<String>, x:Doc) -> DList<String> {
-    let mut result = s.clone();
 
+fn best(w:uint, s:DList<String>, x:Doc) -> DList<String> {
     fn go(w:uint, s:&mut DList<String>, k:uint, xs:&mut DList<(uint,mode::Mode,Doc)>) {
         match xs.pop_front() {
-            None => { },
+            None => {},
             Some((i, mode, ref doc)) => match doc.clone() {
                 Nil => {
                     go(w, s, k, xs)
@@ -95,20 +94,20 @@ fn best(w:uint, s:DList<String>, x:Doc) -> DList<String> {
                 },
                 Newline => {
                     let mut prefix = DList::new();
-                    prefix.push(string_utils::nl_space(i));
+                    prefix.push(util::string::nl_spaces(i));
                     s.prepend(prefix);
                     go(w, s, i, xs)
                 },
                 Break(sp, off) => match mode {
                     mode::Flat => {
                         let mut prefix = DList::new();
-                        prefix.push(string_utils::spaces(sp));
+                        prefix.push(util::string::spaces(sp));
                         s.prepend(prefix);
                         go(w, s, k + sp, xs)
                     },
                     mode::Break => {
                         let mut prefix = DList::new();
-                        prefix.push(string_utils::nl_space(i + off));
+                        prefix.push(util::string::nl_spaces(i + off));
                         s.prepend(prefix);
                         go(w, s, i + off, xs)
                     }
@@ -145,6 +144,7 @@ fn best(w:uint, s:DList<String>, x:Doc) -> DList<String> {
     let mut start = DList::new();
     start.push((0, mode::Break, x));
 
+    let mut result = s.clone();
     go(w, &mut result, 0, &mut start);
     result
 }
@@ -173,6 +173,7 @@ impl Doc {
         Text(String::from_str(s.as_slice()))
     }
 
+    // FIXME: perhaps call it line_break?
     pub fn brk(space:uint, offset:uint) -> Doc {
         Break(space, offset)
     }
@@ -189,11 +190,11 @@ impl Doc {
         ds.iter().fold(Nil, |a, b| a.append(b.clone()))
     }
 
-    pub fn as_str<T:ToString>(t:T) -> Doc {
+    pub fn as_string<T:ToString>(t:T) -> Doc {
         Doc::text(t.to_string())
     }
 
-    pub fn to_string(self, w:uint) -> String {
+    pub fn render(self, w:uint) -> String {
         let strs = best(w, DList::new(), self);
 
         let mut result = String::new();

@@ -16,22 +16,22 @@ mod trees;
 #[bench]
 fn bench(b:&mut test::Bencher) -> () {
     let bbbbbbs =
-        [ Tree::tree("ccc", [])
-        , Tree::tree("dd", [])
+        [ Tree::new("ccc", [])
+        , Tree::new("dd", [])
         ];
     let ffffs =
-        [ Tree::tree("gg", [])
-        , Tree::tree("hhh", [])
-        , Tree::tree("ii", [])
+        [ Tree::new("gg", [])
+        , Tree::new("hhh", [])
+        , Tree::new("ii", [])
         ];
     let aaas =
-        [ Tree::tree("bbbbbb", bbbbbbs)
-        , Tree::tree("eee", [])
-        , Tree::tree("ffff", ffffs)
+        [ Tree::new("bbbbbb", bbbbbbs)
+        , Tree::new("eee", [])
+        , Tree::new("ffff", ffffs)
         ];
-    let example = Tree::tree("aaa", aaas);
+    let example = Tree::new("aaa", aaas);
     let task = || {
-        example.pretty().to_string(70)
+        example.pretty().render(70)
     };
     b.iter(task);
 }

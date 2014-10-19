@@ -12,7 +12,7 @@ pub struct Tree<'a> {
 }
 
 impl<'a> Tree<'a> {
-    pub fn tree(node:&str, subtrees:&'a[Tree<'a>]) -> Tree<'a> {
+    pub fn new(node:&str, subtrees:&'a[Tree<'a>]) -> Tree<'a> {
         Tree {
             node: String::from_str(node),
             subtrees: subtrees
@@ -60,22 +60,22 @@ impl<'a> Tree<'a> {
 #[allow(dead_code)]
 pub fn main() {
     let bbbbbbs =
-        [ Tree::tree("ccc", [])
-        , Tree::tree("dd", [])
+        [ Tree::new("ccc", [])
+        , Tree::new("dd", [])
         ];
     let ffffs =
-        [ Tree::tree("gg", [])
-        , Tree::tree("hhh", [])
-        , Tree::tree("ii", [])
+        [ Tree::new("gg", [])
+        , Tree::new("hhh", [])
+        , Tree::new("ii", [])
         ];
 
     let aaas =
-        [ Tree::tree("bbbbbb", bbbbbbs)
-        , Tree::tree("eee", [])
-        , Tree::tree("ffff", ffffs)
+        [ Tree::new("bbbbbb", bbbbbbs)
+        , Tree::new("eee", [])
+        , Tree::new("ffff", ffffs)
         ];
 
-    let example = Tree::tree("aaa", aaas);
+    let example = Tree::new("aaa", aaas);
 
-    print!("{}", example.pretty().to_string(70));
+    print!("{}", example.pretty().render(70));
 }
