@@ -112,18 +112,18 @@ impl Doc {
         Nil
     }
 
-    pub fn append(&self, e:Doc) -> Doc {
-        match *self {
+    pub fn append(self, e:Doc) -> Doc {
+        match self {
             Nil => e,
-            ref x => match e {
-                Nil => x.clone(),
-                y => Append(box x.clone(), box y)
+            x => match e {
+                Nil => x,
+                y => Append(box x, box y)
             }
         }
     }
 
-    pub fn nest(&self, i:uint) -> Doc {
-        Nest(i, box self.clone())
+    pub fn nest(self, i:uint) -> Doc {
+        Nest(i, box self)
     }
 
     pub fn text(str:String) -> Doc {
@@ -142,8 +142,8 @@ impl Doc {
         Newline
     }
 
-    pub fn group(&self) -> Doc {
-        Group(box self.clone())
+    pub fn group(self) -> Doc {
+        Group(box self)
     }
 
     pub fn concat(ds:&[Doc]) -> Doc {
@@ -163,8 +163,8 @@ impl Doc {
         Text(String::from_str(res))
     }
 
-    pub fn to_string(&self, w:uint) -> String {
-        let mut strs = best(w, Vec::new(), self.clone());
+    pub fn to_string(self, w:uint) -> String {
+        let mut strs = best(w, Vec::new(), self);
         strs.reverse();
         strs.push(String::from_str("\n"));
         strs.concat()
