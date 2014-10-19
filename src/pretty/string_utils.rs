@@ -1,10 +1,7 @@
+use std::iter::Repeat;
+
 fn replicate<A:Clone>(x:A, l:uint) -> Vec<A> {
-    let i = 0u;
-    let mut res = Vec::new();
-    for _ in range(i,l) {
-        res.push(x.clone());
-    }
-    res
+    FromIterator::from_iter(Repeat::new(x).take(l))
 }
 
 fn pad_right(c:char, l:uint, str:String) -> String {
@@ -37,4 +34,3 @@ pub fn nl_space(i:uint) -> String {
 pub fn spaces(i:uint) -> String {
     pad_left(' ', i, String::from_str(""))
 }
-
