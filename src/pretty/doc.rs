@@ -86,7 +86,7 @@ fn best(w:uint, s:DList<String>, x:Doc) -> DList<String> {
                     xs.prepend(prefix);
                     go(w, s, k, xs)
                 },
-                Text(ref str) => {
+                Text(str) => {
                     let mut prefix = DList::new();
                     prefix.push(str.clone());
                     s.prepend(prefix);
