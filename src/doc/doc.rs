@@ -133,6 +133,10 @@ impl Doc {
         Text(str)
     }
 
+    pub fn str(str:&str) -> Doc {
+        Text(String::from_str(str))
+    }
+
     pub fn brk(space:uint, offset:uint) -> Doc {
         Break(space, offset)
     }
