@@ -6,7 +6,7 @@ authors = ["Jonathan Sterling <jon@jonmsterling.com>"]
 
 [lib]
 name = "pretty"
-path = "src/lib.rs"
+path = "src/pretty/lib.rs"
 
 [[bin]]
 name = "pretty"

@@ -2,3 +2,5 @@
 #![crate_type="rlib"]
 
 pub mod doc;
+mod mode;
+mod string_utils;
