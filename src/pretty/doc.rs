@@ -57,10 +57,10 @@ fn fitting(xs:Vec<(uint,mode::Mode,Doc)>, left:uint) -> bool {
     }
 }
 
-fn prepend<A:Clone>(v: Vec<A>, x:A) -> Vec<A> {
-    let mut res = v;
-    res.insert(0, x);
-    res
+fn prepend<A:Clone>(mut v: Vec<A>, x:A) -> Vec<A> {
+    // let mut res = v;
+    v.insert(0, x);
+    v
 }
 
 fn best(w:uint, s:Vec<String>, x:Doc) -> Vec<String> {
