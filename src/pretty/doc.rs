@@ -16,7 +16,7 @@ enum DOC {
 
 pub type Doc = DOC;
 
-fn fitting(cmds: &mut DList<(uint,mode::Mode,Doc)>, mut rem:int) -> bool {
+fn fitting(mut cmds: DList<(uint,mode::Mode,Doc)>, mut rem:int) -> bool {
     let mut fits = true;
 
     loop {
@@ -106,7 +106,7 @@ fn best(width:uint, mut buf:DList<String>, x:Doc) -> DList<String> {
                         let mut flat_prefix = DList::new();
                         flat_prefix.push((i, mode::Flat, *x.clone()));
                         cmds_dup.prepend(flat_prefix);
-                        if fitting(&mut cmds_dup, width as int - pos as int) {
+                        if fitting(cmds_dup, width as int - pos as int) {
                             let mut prefix = DList::new();
                             prefix.push((i, mode::Flat, *x.clone()));
                             cmds.prepend(prefix);
