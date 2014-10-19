@@ -6,7 +6,7 @@ use pretty::doc::{
 
 #[deriving(Clone)]
 #[deriving(Show)]
-struct Tree<'a> {
+pub struct Tree<'a> {
     node:String,
     subtrees:&'a[Tree<'a>]
 }
@@ -57,6 +57,7 @@ impl<'a> Tree<'a> {
     }
 }
 
+#[allow(dead_code)]
 pub fn main() {
     let bbbbbbs =
         [ Tree::tree("ccc", [])
