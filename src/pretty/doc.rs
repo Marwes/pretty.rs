@@ -57,60 +57,61 @@ fn fitting(xs:DList<(uint,mode::Mode,Doc)>, left:uint) -> bool {
 
 
 fn best(w:uint, s:DList<String>, x:Doc) -> DList<String> {
-    fn go(w:uint, s:&mut DList<String>, k:uint, xs:&mut DList<(uint,mode::Mode,Doc)>) {
-        match xs.pop_front() {
-            None => {},
+    let mut start = DList::new();
+    start.push((0u, mode::Break, x.clone()));
+
+    let mut result = s.clone();
+    let mut k = 0u;
+
+    loop {
+        match start.pop_front() {
+            None => {
+                break;
+            },
             Some((i, mode, ref doc)) => match doc.clone() {
-                Nil => {
-                    go(w, s, k, xs)
-                },
+                Nil => {},
                 Append(box x, box y) => {
                     let mut prefix = DList::new();
                     prefix.push((i, mode, x));
                     prefix.push((i, mode, y));
-                    xs.prepend(prefix);
-                    go(w, s, k, xs)
+                    start.prepend(prefix);
                 },
                 Nest(j, box x) => {
                     let mut prefix = DList::new();
                     prefix.push((i + j, mode, x));
-                    xs.prepend(prefix);
-                    go(w, s, k, xs)
+                    start.prepend(prefix);
                 },
                 Text(str) => {
                     let mut prefix = DList::new();
                     prefix.push(str.clone());
-                    s.prepend(prefix);
-                    go(w, s, k + str.len(), xs)
+                    result.prepend(prefix);
+                    k += str.len();
                 },
                 Newline => {
                     let mut prefix = DList::new();
                     prefix.push(util::string::nl_spaces(i));
-                    s.prepend(prefix);
-                    go(w, s, i, xs)
+                    result.prepend(prefix);
+                    k = i;
                 },
                 Group(ref x) => match mode {
                     mode::Flat => {
                         let mut prefix = DList::new();
                         prefix.push((i, mode::Flat, *x.clone()));
-                        xs.prepend(prefix);
-                        go(w, s, k, xs)
+                        start.prepend(prefix);
                     },
                     mode::Break => {
-                        let mut ys = xs.clone();
+                        let mut ys = start.clone();
                         let mut flat_prefix = DList::new();
                         flat_prefix.push((i, mode::Flat, *x.clone()));
                         ys.prepend(flat_prefix);
                         if fitting(ys, w - k) {
                             let mut prefix = DList::new();
                             prefix.push((i, mode::Flat, *x.clone()));
-                            xs.prepend(prefix);
-                            go(w, s, k, xs)
+                            start.prepend(prefix);
                         } else {
                             let mut prefix = DList::new();
                             prefix.push((i, mode::Break, *x.clone()));
-                            xs.prepend(prefix);
-                            go(w, s, k, xs)
+                            start.prepend(prefix);
                         }
                     }
                 }
@@ -118,11 +119,6 @@ fn best(w:uint, s:DList<String>, x:Doc) -> DList<String> {
         }
     }
 
-    let mut start = DList::new();
-    start.push((0, mode::Break, x));
-
-    let mut result = s.clone();
-    go(w, &mut result, 0, &mut start);
     result
 }
 
