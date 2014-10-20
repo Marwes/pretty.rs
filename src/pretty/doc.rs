@@ -95,24 +95,24 @@ fn best(width:uint, mut buf:DList<String>, x:Doc) -> DList<String> {
                     buf.prepend(prefix);
                     pos = i;
                 },
-                Group(ref x) => match mode {
+                Group(box x) => match mode {
                     mode::Flat => {
                         let mut prefix = DList::new();
-                        prefix.push((i, mode::Flat, *x.clone()));
+                        prefix.push((i, mode::Flat, x));
                         cmds.prepend(prefix);
                     },
                     mode::Break => {
                         let mut cmds_dup = cmds.clone();
                         let mut flat_prefix = DList::new();
-                        flat_prefix.push((i, mode::Flat, *x.clone()));
+                        flat_prefix.push((i, mode::Flat, x.clone()));
                         cmds_dup.prepend(flat_prefix);
                         if fitting(cmds_dup, width as int - pos as int) {
                             let mut prefix = DList::new();
-                            prefix.push((i, mode::Flat, *x.clone()));
+                            prefix.push((i, mode::Flat, x));
                             cmds.prepend(prefix);
                         } else {
                             let mut prefix = DList::new();
-                            prefix.push((i, mode::Break, *x.clone()));
+                            prefix.push((i, mode::Break, x));
                             cmds.prepend(prefix);
                         }
                     }
