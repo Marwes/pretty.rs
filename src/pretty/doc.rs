@@ -58,9 +58,9 @@ fn fitting(mut cmds:RingBuf<Cmd>, mut rem:int) -> bool {
 impl Doc {
 
     fn best(&self, width:uint) -> Vec<String> {
-        let mut pos: uint = 0;
-        let mut cmds: RingBuf<Cmd> = RingBuf::new();
-        let mut result:Vec<String> = Vec::new();
+        let mut pos = 0u;
+        let mut cmds = RingBuf::new();
+        let mut result = Vec::new();
 
         cmds.push((0, mode::Break, self));
 
