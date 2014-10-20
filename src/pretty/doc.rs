@@ -1,7 +1,7 @@
 use super::mode;
 use super::util;
-use std::collections::DList;
 use std::collections::Deque;
+use std::collections::RingBuf;
 
 #[deriving(Clone)]
 #[deriving(Show)]
@@ -17,7 +17,7 @@ enum DOC {
 pub type Doc = DOC;
 type Cmd<'a> = (uint,mode::Mode,&'a Doc);
 
-fn fitting(mut cmds:DList<Cmd>, mut rem:int) -> bool {
+fn fitting(mut cmds:RingBuf<Cmd>, mut rem:int) -> bool {
     let mut fits = true;
 
     loop {
@@ -57,10 +57,10 @@ fn fitting(mut cmds:DList<Cmd>, mut rem:int) -> bool {
 
 impl Doc {
 
-    fn best(&self, width:uint) -> DList<String> {
+    fn best(&self, width:uint) -> Vec<String> {
         let mut pos: uint = 0;
-        let mut cmds: DList<Cmd> = DList::new();
-        let mut result:DList<String> = DList::new();
+        let mut cmds: RingBuf<Cmd> = RingBuf::new();
+        let mut result:Vec<String> = Vec::new();
 
         cmds.push((0, mode::Break, self));
 
