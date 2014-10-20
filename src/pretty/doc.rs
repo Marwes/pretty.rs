@@ -57,10 +57,10 @@ fn fitting(mut cmds:RingBuf<Cmd>, mut rem:int) -> bool {
 
 impl Doc {
 
-    fn best(&self, width:uint) -> Vec<String> {
+    fn best(&self, width:uint) -> String {
         let mut pos = 0u;
         let mut cmds = RingBuf::new();
-        let mut result = Vec::new();
+        let mut result = String::new();
 
         cmds.push((0, mode::Break, self));
 
@@ -99,16 +99,11 @@ impl Doc {
                         cmds.push_front((ind + off, mode, doc));
                     },
                     &Newline => {
-                        result.push(util::string::nl_spaces(ind));
+                        result.push_str(util::string::nl_spaces(ind).as_slice());
                         pos = ind;
                     },
                     &Text(ref str) => {
-                        // FIXME: we have to clone here otherwise result would
-                        // have to contain String and &String. We cannot make
-                        // Newline case return &String because the region is
-                        // limited to the scope of its arm; it does not live
-                        // long enough (the strings in Text will outlast).
-                        result.push(str.clone());
+                        result.push_str(str.as_slice());
                         pos += str.len();
                     },
                 }
@@ -165,15 +160,9 @@ impl Doc {
         Newline
     }
 
-    // FIXME: could possibly parallelize this part since string append should
-    // be associative. Might be a good example for rust-monoid…
     #[inline]
     pub fn render(&self, width:uint) -> String {
-        let mut result = String::new();
-        for str in self.best(width).iter() {
-            result.push_str(str.as_slice());
-        }
-        result
+        self.best(width)
     }
 
     #[inline]
