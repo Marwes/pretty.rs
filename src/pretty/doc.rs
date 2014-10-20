@@ -165,12 +165,11 @@ impl Doc {
     }
 
     pub fn render(self, w:uint) -> String {
-        let strs = best(w, DList::new(), self);
-
         let mut result = String::new();
-        for str in strs.iter().rev() {
+        for str in best(w, DList::new(), self).iter().rev() {
             result.push_str(str.as_slice());
         }
         result
     }
+
 }
