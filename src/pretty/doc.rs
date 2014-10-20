@@ -36,21 +36,21 @@ fn fitting(mut cmds: DList<(uint,mode::Mode,Doc)>, mut rem:int) -> bool {
                     prefix.push((i, mode, y));
                     cmds.prepend(prefix);
                 },
+                Group(box x) => {
+                    let mut prefix = DList::new();
+                    prefix.push((i, mode, x));
+                    cmds.prepend(prefix);
+                },
                 Nest(j, box x) => {
                     let mut prefix = DList::new();
                     prefix.push((i + j, mode, x));
                     cmds.prepend(prefix);
                 },
-                Text(str) => {
-                    rem -= str.len() as int;
-                },
                 Newline => {
                     fits = true;
                 },
-                Group(box x) => {
-                    let mut prefix = DList::new();
-                    prefix.push((i, mode, x));
-                    cmds.prepend(prefix);
+                Text(str) => {
+                    rem -= str.len() as int;
                 },
             }
         }
@@ -78,23 +78,6 @@ fn best(width:uint, mut buf:DList<String>, x:Doc) -> DList<String> {
                     prefix.push((i, mode, y));
                     cmds.prepend(prefix);
                 },
-                Nest(j, box x) => {
-                    let mut prefix = DList::new();
-                    prefix.push((i + j, mode, x));
-                    cmds.prepend(prefix);
-                },
-                Text(str) => {
-                    let mut prefix = DList::new();
-                    prefix.push(str.clone());
-                    buf.prepend(prefix);
-                    pos += str.len();
-                },
-                Newline => {
-                    let mut prefix = DList::new();
-                    prefix.push(util::string::nl_spaces(i));
-                    buf.prepend(prefix);
-                    pos = i;
-                },
                 Group(box x) => match mode {
                     mode::Flat => {
                         let mut prefix = DList::new();
@@ -116,7 +99,24 @@ fn best(width:uint, mut buf:DList<String>, x:Doc) -> DList<String> {
                             cmds.prepend(prefix);
                         }
                     }
-                }
+                },
+                Nest(j, box x) => {
+                    let mut prefix = DList::new();
+                    prefix.push((i + j, mode, x));
+                    cmds.prepend(prefix);
+                },
+                Newline => {
+                    let mut prefix = DList::new();
+                    prefix.push(util::string::nl_spaces(i));
+                    buf.prepend(prefix);
+                    pos = i;
+                },
+                Text(str) => {
+                    let mut prefix = DList::new();
+                    prefix.push(str.clone());
+                    buf.prepend(prefix);
+                    pos += str.len();
+                },
             }
         }
     }
@@ -140,28 +140,24 @@ impl Doc {
         }
     }
 
-    pub fn nest(self, i:uint) -> Doc {
-        Nest(i, box self)
-    }
-
-    pub fn text<S:Str>(s:S) -> Doc {
-        Text(String::from_str(s.as_slice()))
-    }
-
-    pub fn newline() -> Doc {
-        Newline
-    }
-
-    pub fn group(self) -> Doc {
-        Group(box self)
+    pub fn as_string<T:ToString>(t:T) -> Doc {
+        Doc::text(t.to_string())
     }
 
     pub fn concat(ds:&[Doc]) -> Doc {
         ds.iter().fold(Nil, |a, b| a.append(b.clone()))
     }
 
-    pub fn as_string<T:ToString>(t:T) -> Doc {
-        Doc::text(t.to_string())
+    pub fn group(self) -> Doc {
+        Group(box self)
+    }
+
+    pub fn nest(self, i:uint) -> Doc {
+        Nest(i, box self)
+    }
+
+    pub fn newline() -> Doc {
+        Newline
     }
 
     pub fn render(self, w:uint) -> String {
@@ -170,6 +166,10 @@ impl Doc {
             result.push_str(str.as_slice());
         }
         result
+    }
+
+    pub fn text<S:Str>(s:S) -> Doc {
+        Text(String::from_str(s.as_slice()))
     }
 
 }
