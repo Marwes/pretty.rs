@@ -126,10 +126,12 @@ fn best(width:uint, mut buf:DList<String>, x:Doc) -> DList<String> {
 
 impl Doc {
 
+    #[inline]
     pub fn nil() -> Doc {
         Nil
     }
 
+    #[inline]
     pub fn append(self, e:Doc) -> Doc {
         match self {
             Nil => e,
@@ -140,26 +142,32 @@ impl Doc {
         }
     }
 
+    #[inline]
     pub fn as_string<T:ToString>(t:T) -> Doc {
         Doc::text(t.to_string())
     }
 
+    #[inline]
     pub fn concat(ds:&[Doc]) -> Doc {
         ds.iter().fold(Nil, |a, b| a.append(b.clone()))
     }
 
+    #[inline]
     pub fn group(self) -> Doc {
         Group(box self)
     }
 
+    #[inline]
     pub fn nest(self, i:uint) -> Doc {
         Nest(i, box self)
     }
 
+    #[inline]
     pub fn newline() -> Doc {
         Newline
     }
 
+    #[inline]
     pub fn render(self, w:uint) -> String {
         let mut result = String::new();
         for str in best(w, DList::new(), self).iter().rev() {
@@ -168,6 +176,7 @@ impl Doc {
         result
     }
 
+    #[inline]
     pub fn text<S:Str>(s:S) -> Doc {
         Text(String::from_str(s.as_slice()))
     }
