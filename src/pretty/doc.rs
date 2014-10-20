@@ -165,6 +165,8 @@ impl Doc {
         Newline
     }
 
+    // FIXME: could possibly parallelize this part since string append should
+    // be associative. Might be a good example for rust-monoid…
     #[inline]
     pub fn render(&self, width:uint) -> String {
         let mut result = String::new();
