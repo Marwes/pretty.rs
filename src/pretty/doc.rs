@@ -15,8 +15,9 @@ enum DOC {
 }
 
 pub type Doc = DOC;
+type Cmd<'a> = (uint,mode::Mode,&'a Doc);
 
-fn fitting(mut cmds: DList<(uint,mode::Mode,Doc)>, mut rem:int) -> bool {
+fn fitting(mut cmds:DList<Cmd>, mut rem:int) -> bool {
     let mut fits = true;
 
     loop {
@@ -28,28 +29,23 @@ fn fitting(mut cmds: DList<(uint,mode::Mode,Doc)>, mut rem:int) -> bool {
             None => {
                 break;
             },
-            Some((ind, mode, ref doc)) => match doc.clone() {
-                Nil => {},
-                Append(box lhs, box rhs) => {
-                    let mut prefix = DList::new();
-                    prefix.push((ind, mode, lhs));
-                    prefix.push((ind, mode, rhs));
-                    cmds.prepend(prefix);
+            Some((ind, mode, doc)) => match doc {
+                &Nil => {
                 },
-                Group(box doc) => {
-                    let mut prefix = DList::new();
-                    prefix.push((ind, mode, doc));
-                    cmds.prepend(prefix);
+                &Append(box ref ldoc, box ref rdoc) => {
+                    cmds.push_front((ind, mode, rdoc));
+                    cmds.push_front((ind, mode, ldoc));
                 },
-                Nest(off, box doc) => {
-                    let mut prefix = DList::new();
-                    prefix.push((ind + off, mode, doc));
-                    cmds.prepend(prefix);
+                &Group(box ref doc) => {
+                    cmds.push_front((ind, mode, doc));
                 },
-                Newline => {
+                &Nest(off, box ref doc) => {
+                    cmds.push_front((ind + off, mode, doc));
+                },
+                &Newline => {
                     fits = true;
                 },
-                Text(str) => {
+                &Text(ref str) => {
                     rem -= str.len() as int;
                 },
             }
@@ -61,9 +57,10 @@ fn fitting(mut cmds: DList<(uint,mode::Mode,Doc)>, mut rem:int) -> bool {
 
 impl Doc {
 
-    fn best(self:Doc, width:uint, mut buf:DList<String>) -> DList<String> {
+    fn best(&self, width:uint) -> DList<String> {
         let mut pos: uint = 0;
-        let mut cmds: DList<(uint,mode::Mode,Doc)> = DList::new();
+        let mut cmds: DList<Cmd> = DList::new();
+        let mut result:DList<String> = DList::new();
 
         cmds.push((0, mode::Break, self));
 
@@ -72,58 +69,53 @@ impl Doc {
                 None => {
                     break;
                 },
-                Some((ind, mode, ref doc)) => match doc.clone() {
-                    Nil => {},
-                    Append(box lhs, box rhs) => {
-                        let mut prefix = DList::new();
-                        prefix.push((ind, mode, lhs));
-                        prefix.push((ind, mode, rhs));
-                        cmds.prepend(prefix);
+                Some((ind, mode, doc)) => match doc {
+                    &Nil => {
                     },
-                    Group(box doc) => match mode {
+                    &Append(box ref ldoc, box ref rdoc) => {
+                        cmds.push_front((ind, mode, rdoc));
+                        cmds.push_front((ind, mode, ldoc));
+                    },
+                    &Group(box ref doc) => match mode {
                         mode::Flat => {
-                            let mut prefix = DList::new();
-                            prefix.push((ind, mode::Flat, doc));
-                            cmds.prepend(prefix);
+                            cmds.push_front((ind, mode::Flat, doc));
                         },
                         mode::Break => {
+                            // FIXME: fitting() modifies cmds so we must either
+                            // take a clone and pass it or rewrite fitting()
+                            // to modify a separate cmd stack and only observe
+                            // this one.
                             let mut cmds_dup = cmds.clone();
-                            let mut flat_prefix = DList::new();
-                            flat_prefix.push((ind, mode::Flat, doc.clone()));
-                            cmds_dup.prepend(flat_prefix);
+                            let next = (ind, mode::Flat, doc);
+                            cmds_dup.push_front(next);
                             if fitting(cmds_dup, width as int - pos as int) {
-                                let mut prefix = DList::new();
-                                prefix.push((ind, mode::Flat, doc));
-                                cmds.prepend(prefix);
+                                cmds.push_front(next);
                             } else {
-                                let mut prefix = DList::new();
-                                prefix.push((ind, mode::Break, doc));
-                                cmds.prepend(prefix);
+                                cmds.push_front((ind, mode::Break, doc));
                             }
                         }
                     },
-                    Nest(off, box doc) => {
-                        let mut prefix = DList::new();
-                        prefix.push((ind + off, mode, doc));
-                        cmds.prepend(prefix);
+                    &Nest(off, box ref doc) => {
+                        cmds.push_front((ind + off, mode, doc));
                     },
-                    Newline => {
-                        let mut prefix = DList::new();
-                        prefix.push(util::string::nl_spaces(ind));
-                        buf.prepend(prefix);
+                    &Newline => {
+                        result.push(util::string::nl_spaces(ind));
                         pos = ind;
                     },
-                    Text(str) => {
-                        let mut prefix = DList::new();
-                        prefix.push(str.clone());
-                        buf.prepend(prefix);
+                    &Text(ref str) => {
+                        // FIXME: we have to clone here otherwise result would
+                        // have to contain String and &String. We cannot make
+                        // Newline case return &String because the region is
+                        // limited to the scope of its arm; it does not live
+                        // long enough (the strings in Text will outlast).
+                        result.push(str.clone());
                         pos += str.len();
                     },
                 }
             }
         }
 
-        buf
+        result
     }
 
     #[inline]
@@ -134,10 +126,16 @@ impl Doc {
     #[inline]
     pub fn append(self, that:Doc) -> Doc {
         match self {
-            Nil => that,
-            lhs => match that {
-                Nil => lhs,
-                rhs => Append(box lhs, box rhs)
+            Nil => {
+                that
+            },
+            ldoc => match that {
+                Nil => {
+                    ldoc
+                },
+                rdoc => {
+                    Append(box ldoc, box rdoc)
+                },
             }
         }
     }
@@ -168,16 +166,16 @@ impl Doc {
     }
 
     #[inline]
-    pub fn render(self, width:uint) -> String {
+    pub fn render(&self, width:uint) -> String {
         let mut result = String::new();
-        for str in self.best(width, DList::new()).iter().rev() {
+        for str in self.best(width).iter() {
             result.push_str(str.as_slice());
         }
         result
     }
 
     #[inline]
-    pub fn text<S:Str>(str:S) -> Doc {
+    pub fn text<T:Str>(str:T) -> Doc {
         Text(String::from_str(str.as_slice()))
     }
 
