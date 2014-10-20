@@ -31,7 +31,9 @@ fn bench(b:&mut test::Bencher) -> () {
         ];
     let example = Tree::new("aaa", aaas);
     let task = || {
-        example.pretty().render(70)
+        for _ in range (0u, 100u) {
+            example.pretty().render(70);
+        }
     };
     b.iter(task);
 }
