@@ -54,6 +54,63 @@ fn fitting(mut cmds:Vec<Cmd>, mut rem:int) -> bool {
     fits
 }
 
+#[inline(always)]
+fn best(doc:&Doc, width:uint) -> String {
+    let mut pos = 0u;
+    let mut cmds = vec![];
+    let mut result = String::new();
+
+    cmds.push((0, mode::Break, doc));
+
+    loop {
+        match cmds.pop() {
+            None => {
+                break;
+            },
+            Some((ind, mode, doc)) => match doc {
+                &Nil => {
+                },
+                &Append(box ref ldoc, box ref rdoc) => {
+                    cmds.push((ind, mode, rdoc));
+                    cmds.push((ind, mode, ldoc));
+                },
+                &Group(box ref doc) => match mode {
+                    mode::Flat => {
+                        cmds.push((ind, mode::Flat, doc));
+                    },
+                    mode::Break => {
+                        // FIXME: fitting() modifies cmds so we must either
+                        // take a clone and pass it or rewrite fitting()
+                        // to modify a separate cmd stack and only observe
+                        // this one.
+                        let mut cmds_dup = cmds.clone();
+                        let next = (ind, mode::Flat, doc);
+                        cmds_dup.push(next);
+                        if fitting(cmds_dup, width as int - pos as int) {
+                            cmds.push(next);
+                        } else {
+                            cmds.push((ind, mode::Break, doc));
+                        }
+                    }
+                },
+                &Nest(off, box ref doc) => {
+                    cmds.push((ind + off, mode, doc));
+                },
+                &Newline => {
+                    result.push_str(util::string::nl_spaces(ind).as_slice());
+                    pos = ind;
+                },
+                &Text(ref str) => {
+                    result.push_str(str.as_slice());
+                    pos += str.len();
+                },
+            }
+        }
+    }
+
+    result
+}
+
 impl Doc {
 
     #[inline]
@@ -105,59 +162,7 @@ impl Doc {
 
     #[inline]
     pub fn render(&self, width:uint) -> String {
-        let mut pos = 0u;
-        let mut cmds = vec![];
-        let mut result = String::new();
-
-        cmds.push((0, mode::Break, self));
-
-        loop {
-            match cmds.pop() {
-                None => {
-                    break;
-                },
-                Some((ind, mode, doc)) => match doc {
-                    &Nil => {
-                    },
-                    &Append(box ref ldoc, box ref rdoc) => {
-                        cmds.push((ind, mode, rdoc));
-                        cmds.push((ind, mode, ldoc));
-                    },
-                    &Group(box ref doc) => match mode {
-                        mode::Flat => {
-                            cmds.push((ind, mode::Flat, doc));
-                        },
-                        mode::Break => {
-                            // FIXME: fitting() modifies cmds so we must either
-                            // take a clone and pass it or rewrite fitting()
-                            // to modify a separate cmd stack and only observe
-                            // this one.
-                            let mut cmds_dup = cmds.clone();
-                            let next = (ind, mode::Flat, doc);
-                            cmds_dup.push(next);
-                            if fitting(cmds_dup, width as int - pos as int) {
-                                cmds.push(next);
-                            } else {
-                                cmds.push((ind, mode::Break, doc));
-                            }
-                        }
-                    },
-                    &Nest(off, box ref doc) => {
-                        cmds.push((ind + off, mode, doc));
-                    },
-                    &Newline => {
-                        result.push_str(util::string::nl_spaces(ind).as_slice());
-                        pos = ind;
-                    },
-                    &Text(ref str) => {
-                        result.push_str(str.as_slice());
-                        pos += str.len();
-                    },
-                }
-            }
-        }
-
-        result
+        best(self, width)
     }
 
     #[inline]
