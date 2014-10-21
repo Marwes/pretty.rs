@@ -1,7 +1,5 @@
 use super::mode;
 use super::util;
-use std::collections::Deque;
-use std::collections::RingBuf;
 
 #[deriving(Clone)]
 #[deriving(Show)]
@@ -18,7 +16,7 @@ pub type Doc = DOC;
 type Cmd<'a> = (uint,mode::Mode,&'a Doc);
 
 #[inline(always)]
-fn fitting(mut cmds:RingBuf<Cmd>, mut rem:int) -> bool {
+fn fitting(mut cmds:Vec<Cmd>, mut rem:int) -> bool {
     let mut fits = true;
 
     loop {
@@ -26,7 +24,7 @@ fn fitting(mut cmds:RingBuf<Cmd>, mut rem:int) -> bool {
             fits = false;
             break;
         }
-        match cmds.pop_front() {
+        match cmds.pop() {
             None => {
                 break;
             },
@@ -34,14 +32,14 @@ fn fitting(mut cmds:RingBuf<Cmd>, mut rem:int) -> bool {
                 &Nil => {
                 },
                 &Append(box ref ldoc, box ref rdoc) => {
-                    cmds.push_front((ind, mode, rdoc));
-                    cmds.push_front((ind, mode, ldoc));
+                    cmds.push((ind, mode, rdoc));
+                    cmds.push((ind, mode, ldoc));
                 },
                 &Group(box ref doc) => {
-                    cmds.push_front((ind, mode, doc));
+                    cmds.push((ind, mode, doc));
                 },
                 &Nest(off, box ref doc) => {
-                    cmds.push_front((ind + off, mode, doc));
+                    cmds.push((ind + off, mode, doc));
                 },
                 &Newline => {
                     fits = true;
@@ -108,13 +106,13 @@ impl Doc {
     #[inline]
     pub fn render(&self, width:uint) -> String {
         let mut pos = 0u;
-        let mut cmds = RingBuf::new();
+        let mut cmds = vec![];
         let mut result = String::new();
 
         cmds.push((0, mode::Break, self));
 
         loop {
-            match cmds.pop_front() {
+            match cmds.pop() {
                 None => {
                     break;
                 },
@@ -122,12 +120,12 @@ impl Doc {
                     &Nil => {
                     },
                     &Append(box ref ldoc, box ref rdoc) => {
-                        cmds.push_front((ind, mode, rdoc));
-                        cmds.push_front((ind, mode, ldoc));
+                        cmds.push((ind, mode, rdoc));
+                        cmds.push((ind, mode, ldoc));
                     },
                     &Group(box ref doc) => match mode {
                         mode::Flat => {
-                            cmds.push_front((ind, mode::Flat, doc));
+                            cmds.push((ind, mode::Flat, doc));
                         },
                         mode::Break => {
                             // FIXME: fitting() modifies cmds so we must either
@@ -136,16 +134,16 @@ impl Doc {
                             // this one.
                             let mut cmds_dup = cmds.clone();
                             let next = (ind, mode::Flat, doc);
-                            cmds_dup.push_front(next);
+                            cmds_dup.push(next);
                             if fitting(cmds_dup, width as int - pos as int) {
-                                cmds.push_front(next);
+                                cmds.push(next);
                             } else {
-                                cmds.push_front((ind, mode::Break, doc));
+                                cmds.push((ind, mode::Break, doc));
                             }
                         }
                     },
                     &Nest(off, box ref doc) => {
-                        cmds.push_front((ind + off, mode, doc));
+                        cmds.push((ind + off, mode, doc));
                     },
                     &Newline => {
                         result.push_str(util::string::nl_spaces(ind).as_slice());
