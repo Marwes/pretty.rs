@@ -16,30 +16,43 @@ pub type Doc = DOC;
 type Cmd<'a> = (uint,mode::Mode,&'a Doc);
 
 #[inline(always)]
-fn fitting(mut cmds:Vec<Cmd>, mut rem:int) -> bool {
+fn fitting<'a>(next:Cmd<'a>,
+               bcmds:&Vec<Cmd<'a>>,
+               fcmds:&mut Vec<Cmd<'a>>,
+               mut rem:int)
+               -> bool {
+    let mut bidx = bcmds.len();
     let mut fits = true;
+
+    fcmds.clear();      // clear from previous calls from best
+    fcmds.push(next);
 
     loop {
         if rem < 0 {
             fits = false;
             break;
         }
-        match cmds.pop() {
+        match fcmds.pop() {
             None => {
-                break;
+                if bidx == 0 {
+                    break;
+                } else {
+                    fcmds.push(bcmds[ bidx - 1 ]);
+                    bidx -= 1;
+                }
             },
             Some((ind, mode, doc)) => match doc {
                 &Nil => {
                 },
                 &Append(box ref ldoc, box ref rdoc) => {
-                    cmds.push((ind, mode, rdoc));
-                    cmds.push((ind, mode, ldoc));
+                    fcmds.push((ind, mode, rdoc));
+                    fcmds.push((ind, mode, ldoc));
                 },
                 &Group(box ref doc) => {
-                    cmds.push((ind, mode, doc));
+                    fcmds.push((ind, mode, doc));
                 },
                 &Nest(off, box ref doc) => {
-                    cmds.push((ind + off, mode, doc));
+                    fcmds.push((ind + off, mode, doc));
                 },
                 &Newline => {
                     fits = true;
@@ -57,13 +70,13 @@ fn fitting(mut cmds:Vec<Cmd>, mut rem:int) -> bool {
 #[inline(always)]
 fn best(doc:&Doc, width:uint) -> String {
     let mut pos = 0u;
-    let mut cmds = vec![];
     let mut result = String::new();
 
-    cmds.push((0, mode::Break, doc));
+    let mut bcmds = vec![(0, mode::Break, doc)];
+    let mut fcmds = vec![];
 
     loop {
-        match cmds.pop() {
+        match bcmds.pop() {
             None => {
                 break;
             },
@@ -71,30 +84,27 @@ fn best(doc:&Doc, width:uint) -> String {
                 &Nil => {
                 },
                 &Append(box ref ldoc, box ref rdoc) => {
-                    cmds.push((ind, mode, rdoc));
-                    cmds.push((ind, mode, ldoc));
+                    bcmds.push((ind, mode, rdoc));
+                    bcmds.push((ind, mode, ldoc));
                 },
                 &Group(box ref doc) => match mode {
                     mode::Flat => {
-                        cmds.push((ind, mode::Flat, doc));
+                        bcmds.push((ind, mode::Flat, doc));
                     },
                     mode::Break => {
-                        // FIXME: fitting() modifies cmds so we must either
-                        // take a clone and pass it or rewrite fitting()
-                        // to modify a separate cmd stack and only observe
-                        // this one.
-                        let mut cmds_dup = cmds.clone();
                         let next = (ind, mode::Flat, doc);
-                        cmds_dup.push(next);
-                        if fitting(cmds_dup, width as int - pos as int) {
-                            cmds.push(next);
+                        if fitting(next,
+                                   &bcmds,
+                                   &mut fcmds,
+                                   width as int - pos as int) {
+                            bcmds.push(next);
                         } else {
-                            cmds.push((ind, mode::Break, doc));
+                            bcmds.push((ind, mode::Break, doc));
                         }
                     }
                 },
                 &Nest(off, box ref doc) => {
-                    cmds.push((ind + off, mode, doc));
+                    bcmds.push((ind + off, mode, doc));
                 },
                 &Newline => {
                     result.push_str(util::string::nl_spaces(ind).as_slice());
