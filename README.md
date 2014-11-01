@@ -2,6 +2,8 @@
 
 A pretty printer library for rust.
 
+[![build status](https://api.travis-ci.org/darinmorrison/rust-pretty.svg?branch=master)](https://travis-ci.org/darinmorrison/rust-pretty)
+
 ## Synopsis
 
 This library is based on Larsen's SML translation (https://github.com/kfl/wpp) of Wadler's Haskell pretty printer (http://homepages.inf.ed.ac.uk/wadler/papers/prettier/prettier.pdf).

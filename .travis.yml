@@ -1,0 +1,6 @@
+language: rust
+os:
+    - linux
+script:
+    - cargo build -v
+    - cargo test  -v
