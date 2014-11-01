@@ -2,7 +2,7 @@
 
 A pretty printer library for rust.
 
-[![build status](https://api.travis-ci.org/darinmorrison/rust-pretty.svg?branch=master)](https://travis-ci.org/darinmorrison/rust-pretty)
+[![build status](https://api.travis-ci.org/jonsterling/rust-pretty.svg?branch=master)](https://travis-ci.org/jonsterling/rust-pretty)
 
 ## Synopsis
 
