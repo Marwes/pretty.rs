@@ -5,9 +5,12 @@ version = "0.0.1"
 authors = ["Jonathan Sterling <jon@jonmsterling.com>"]
 
 [lib]
-name = "pretty"
-path = "src/pretty/lib.rs"
+doc     = true
+doctest = false
+name    = "pretty"
+path    = "src/pretty/lib.rs"
 
 [[bin]]
+doc  = false
 name = "trees"
 path = "examples/trees.rs"
