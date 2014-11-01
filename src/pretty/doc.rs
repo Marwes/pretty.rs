@@ -3,7 +3,7 @@ use super::util;
 
 #[deriving(Clone)]
 #[deriving(Show)]
-enum DOC {
+pub enum Doc {
     Nil,
     Append(Box<Doc>, Box<Doc>),
     Group(Box<Doc>),
@@ -12,7 +12,6 @@ enum DOC {
     Text(String),
 }
 
-pub type Doc = DOC;
 type Cmd<'a> = (uint,mode::Mode,&'a Doc);
 
 #[inline(always)]
@@ -68,7 +67,7 @@ fn fitting<'a>(next:Cmd<'a>,
 }
 
 #[inline(always)]
-fn best(doc:&Doc, width:uint) -> String {
+pub fn best(doc:&Doc, width:uint) -> String {
     let mut pos = 0u;
     let mut result = String::new();
 
@@ -119,65 +118,4 @@ fn best(doc:&Doc, width:uint) -> String {
     }
 
     result
-}
-
-impl Doc {
-
-    #[inline]
-    pub fn nil() -> Doc {
-        Nil
-    }
-
-    #[inline]
-    pub fn append(self, that:Doc) -> Doc {
-        match self {
-            Nil => {
-                that
-            },
-            ldoc => match that {
-                Nil => {
-                    ldoc
-                },
-                rdoc => {
-                    Append(box ldoc, box rdoc)
-                },
-            }
-        }
-    }
-
-    #[inline]
-    pub fn as_string<T:ToString>(t:T) -> Doc {
-        Doc::text(t.to_string())
-    }
-
-    #[inline]
-    pub fn concat(ds:&[Doc]) -> Doc {
-        ds.iter().fold(Nil, |a, b| a.append(b.clone()))
-    }
-
-    #[inline]
-    pub fn group(self) -> Doc {
-        Group(box self)
-    }
-
-    #[inline]
-    pub fn nest(self, off:uint) -> Doc {
-        Nest(off, box self)
-    }
-
-    #[inline]
-    pub fn newline() -> Doc {
-        Newline
-    }
-
-    #[inline]
-    pub fn render(&self, width:uint) -> String {
-        best(self, width)
-    }
-
-    #[inline]
-    pub fn text<T:Str>(str:T) -> Doc {
-        Text(String::from_str(str.as_slice()))
-    }
-
 }
