@@ -21,7 +21,7 @@ impl<'a> Tree<'a> {
 
     fn pretty_trees(trees:&'a[Tree<'a>]) -> Doc {
         match trees {
-            [] => fail!(),
+            [] => panic!(),
             [ref t] => t.pretty(),
             [ref t, ref ts..] => {
                 t.pretty().append(
