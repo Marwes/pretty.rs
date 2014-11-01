@@ -1,6 +1,6 @@
 # rust-pretty
 
-A pretty printer library for rust.
+Wadler-style pretty-printing combinators in Rust
 
 [![build status](https://api.travis-ci.org/jonsterling/rust-pretty.svg?branch=master)](https://travis-ci.org/jonsterling/rust-pretty)
 
@@ -29,5 +29,5 @@ See [Installing Rust](http://doc.rust-lang.org/guide.html#installing-rust) for f
 
 ```
 $ cargo build       ## build library and binary
-$ cargo run         ## run binary (does nothing useful yet)
+$ cargo run         ## run the example (pretty trees)
 ```
