@@ -81,7 +81,7 @@ pub fn main() {
         , Tree::new("ffff", ffffs)
         ];
 
-    let example = Tree::new("aaa", aaas);
+    let example = Tree::new("aaaa", aaas);
 
     print!("{}", example.pretty().render(70));
 }
