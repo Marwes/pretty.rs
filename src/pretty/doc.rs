@@ -1,7 +1,5 @@
 use super::mode;
 use super::util;
-use std::collections::DList;
-use std::collections::Deque;
 
 #[deriving(Clone)]
 #[deriving(Show)]
@@ -15,45 +13,52 @@ enum DOC {
 }
 
 pub type Doc = DOC;
+type Cmd<'a> = (uint,mode::Mode,&'a Doc);
 
-fn fitting(xs:&mut DList<(uint,mode::Mode,Doc)>, initial_left:int) -> bool {
+#[inline(always)]
+fn fitting<'a>(next:Cmd<'a>,
+               bcmds:&Vec<Cmd<'a>>,
+               fcmds:&mut Vec<Cmd<'a>>,
+               mut rem:int)
+               -> bool {
+    let mut bidx = bcmds.len();
     let mut fits = true;
 
-    let mut left = initial_left;
+    fcmds.clear();      // clear from previous calls from best
+    fcmds.push(next);
 
     loop {
-        if left < 0 {
+        if rem < 0 {
             fits = false;
             break;
         }
-
-        match xs.pop_front() {
+        match fcmds.pop() {
             None => {
-                break;
+                if bidx == 0 {
+                    break;
+                } else {
+                    fcmds.push(bcmds[ bidx - 1 ]);
+                    bidx -= 1;
+                }
             },
-            Some((i, mode, ref doc)) => match doc.clone() {
-                Nil => {},
-                Append(box x, box y) => {
-                    let mut prefix = DList::new();
-                    prefix.push((i, mode, x));
-                    prefix.push((i, mode, y));
-                    xs.prepend(prefix);
+            Some((ind, mode, doc)) => match doc {
+                &Nil => {
                 },
-                Nest(j, box x) => {
-                    let mut prefix = DList::new();
-                    prefix.push((i + j, mode, x));
-                    xs.prepend(prefix);
+                &Append(box ref ldoc, box ref rdoc) => {
+                    fcmds.push((ind, mode, rdoc));
+                    fcmds.push((ind, mode, ldoc));
                 },
-                Text(str) => {
-                    left -= str.len() as int;
+                &Group(box ref doc) => {
+                    fcmds.push((ind, mode, doc));
                 },
-                Newline => {
+                &Nest(off, box ref doc) => {
+                    fcmds.push((ind + off, mode, doc));
+                },
+                &Newline => {
                     fits = true;
                 },
-                Group(box x) => {
-                    let mut prefix = DList::new();
-                    prefix.push((i, mode, x));
-                    xs.prepend(prefix);
+                &Text(ref str) => {
+                    rem -= str.len() as int;
                 },
             }
         }
@@ -62,66 +67,53 @@ fn fitting(xs:&mut DList<(uint,mode::Mode,Doc)>, initial_left:int) -> bool {
     fits
 }
 
+#[inline(always)]
+fn best(doc:&Doc, width:uint) -> String {
+    let mut pos = 0u;
+    let mut result = String::new();
 
-fn best(w:uint, s:DList<String>, x:Doc) -> DList<String> {
-    let mut start = DList::new();
-    start.push((0u, mode::Break, x.clone()));
-
-    let mut result = s.clone();
-    let mut k = 0u;
+    let mut bcmds = vec![(0, mode::Break, doc)];
+    let mut fcmds = vec![];
 
     loop {
-        match start.pop_front() {
+        match bcmds.pop() {
             None => {
                 break;
             },
-            Some((i, mode, ref doc)) => match doc.clone() {
-                Nil => {},
-                Append(box x, box y) => {
-                    let mut prefix = DList::new();
-                    prefix.push((i, mode, x));
-                    prefix.push((i, mode, y));
-                    start.prepend(prefix);
+            Some((ind, mode, doc)) => match doc {
+                &Nil => {
                 },
-                Nest(j, box x) => {
-                    let mut prefix = DList::new();
-                    prefix.push((i + j, mode, x));
-                    start.prepend(prefix);
+                &Append(box ref ldoc, box ref rdoc) => {
+                    bcmds.push((ind, mode, rdoc));
+                    bcmds.push((ind, mode, ldoc));
                 },
-                Text(str) => {
-                    let mut prefix = DList::new();
-                    prefix.push(str.clone());
-                    result.prepend(prefix);
-                    k += str.len();
-                },
-                Newline => {
-                    let mut prefix = DList::new();
-                    prefix.push(util::string::nl_spaces(i));
-                    result.prepend(prefix);
-                    k = i;
-                },
-                Group(ref x) => match mode {
+                &Group(box ref doc) => match mode {
                     mode::Flat => {
-                        let mut prefix = DList::new();
-                        prefix.push((i, mode::Flat, *x.clone()));
-                        start.prepend(prefix);
+                        bcmds.push((ind, mode::Flat, doc));
                     },
                     mode::Break => {
-                        let mut ys = start.clone();
-                        let mut flat_prefix = DList::new();
-                        flat_prefix.push((i, mode::Flat, *x.clone()));
-                        ys.prepend(flat_prefix);
-                        if fitting(&mut ys, w as int - k as int) {
-                            let mut prefix = DList::new();
-                            prefix.push((i, mode::Flat, *x.clone()));
-                            start.prepend(prefix);
+                        let next = (ind, mode::Flat, doc);
+                        if fitting(next,
+                                   &bcmds,
+                                   &mut fcmds,
+                                   width as int - pos as int) {
+                            bcmds.push(next);
                         } else {
-                            let mut prefix = DList::new();
-                            prefix.push((i, mode::Break, *x.clone()));
-                            start.prepend(prefix);
+                            bcmds.push((ind, mode::Break, doc));
                         }
                     }
-                }
+                },
+                &Nest(off, box ref doc) => {
+                    bcmds.push((ind + off, mode, doc));
+                },
+                &Newline => {
+                    result.push_str(util::string::nl_spaces(ind).as_slice());
+                    pos = ind;
+                },
+                &Text(ref str) => {
+                    result.push_str(str.as_slice());
+                    pos += str.len();
+                },
             }
         }
     }
@@ -131,51 +123,61 @@ fn best(w:uint, s:DList<String>, x:Doc) -> DList<String> {
 
 impl Doc {
 
+    #[inline]
     pub fn nil() -> Doc {
         Nil
     }
 
-    pub fn append(self, e:Doc) -> Doc {
+    #[inline]
+    pub fn append(self, that:Doc) -> Doc {
         match self {
-            Nil => e,
-            x => match e {
-                Nil => x,
-                y => Append(box x, box y)
+            Nil => {
+                that
+            },
+            ldoc => match that {
+                Nil => {
+                    ldoc
+                },
+                rdoc => {
+                    Append(box ldoc, box rdoc)
+                },
             }
         }
     }
 
-    pub fn nest(self, i:uint) -> Doc {
-        Nest(i, box self)
-    }
-
-    pub fn text<S:Str>(s:S) -> Doc {
-        Text(String::from_str(s.as_slice()))
-    }
-
-    pub fn newline() -> Doc {
-        Newline
-    }
-
-    pub fn group(self) -> Doc {
-        Group(box self)
-    }
-
-    pub fn concat(ds:&[Doc]) -> Doc {
-        ds.iter().fold(Nil, |a, b| a.append(b.clone()))
-    }
-
+    #[inline]
     pub fn as_string<T:ToString>(t:T) -> Doc {
         Doc::text(t.to_string())
     }
 
-    pub fn render(self, w:uint) -> String {
-        let strs = best(w, DList::new(), self);
-
-        let mut result = String::new();
-        for str in strs.iter().rev() {
-            result.push_str(str.as_slice());
-        }
-        result
+    #[inline]
+    pub fn concat(ds:&[Doc]) -> Doc {
+        ds.iter().fold(Nil, |a, b| a.append(b.clone()))
     }
+
+    #[inline]
+    pub fn group(self) -> Doc {
+        Group(box self)
+    }
+
+    #[inline]
+    pub fn nest(self, off:uint) -> Doc {
+        Nest(off, box self)
+    }
+
+    #[inline]
+    pub fn newline() -> Doc {
+        Newline
+    }
+
+    #[inline]
+    pub fn render(&self, width:uint) -> String {
+        best(self, width)
+    }
+
+    #[inline]
+    pub fn text<T:Str>(str:T) -> Doc {
+        Text(String::from_str(str.as_slice()))
+    }
+
 }

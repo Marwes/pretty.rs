@@ -53,7 +53,13 @@ impl<'a> Tree<'a> {
     }
 
     pub fn pretty(&self) -> Doc {
-        Doc::text(self.node.clone()).append(Tree::pretty_bracket(self.subtrees))
+        Doc::text(
+            self.node.clone()
+        ).append(
+            Tree::pretty_bracket(
+                self.subtrees
+            )
+        ).group()
     }
 }
 
