@@ -1,11 +1,11 @@
 #[inline]
-pub fn spaces(i:uint) -> String {
-    String::from_char(i, ' ')
+pub fn spaces(n:uint) -> String {
+    String::from_char(n, ' ')
 }
 
 #[inline]
-pub fn nl_spaces(i:uint) -> String {
+pub fn nl_spaces(n:uint) -> String {
     let mut str = String::from_str("\n");
-    str.push_str(spaces(i).as_slice());
+    str.push_str(spaces(n).as_slice());
     str
 }
