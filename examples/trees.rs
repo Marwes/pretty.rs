@@ -3,6 +3,8 @@ extern crate pretty;
 use pretty::{
     Doc
 };
+use std::io;
+use std::str;
 
 #[deriving(Clone)]
 #[deriving(Show)]
@@ -74,14 +76,30 @@ pub fn main() {
         , Tree::new("hhh", [])
         , Tree::new("ii", [])
         ];
-
     let aaas =
         [ Tree::new("bbbbbb", bbbbbbs)
         , Tree::new("eee", [])
         , Tree::new("ffff", ffffs)
         ];
-
     let example = Tree::new("aaaa", aaas);
 
-    println!("{}", example.pretty().render(70));
+    {
+        print!("\nwriting to stdout directly:\n");
+        let mut out = io::stdout();
+        example.pretty().render(70, &mut out)
+    }.and_then(|()| {
+        print!("\nwriting to string then printing:\n");
+        let mut out = io::MemWriter::new();
+        example.pretty().render(70, &mut out)
+            .map(|()| {
+                println!(
+                    "{}",
+                    str::from_utf8(
+                        out.clone().unwrap().as_slice()
+                    ).unwrap_or("<buffer is not a utf-8 encoded string>")
+                )
+            })
+    }).unwrap_or_else(|err| {
+        println!("error: {}", err)
+    });
 }

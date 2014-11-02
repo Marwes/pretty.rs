@@ -16,6 +16,7 @@ use doc::{
     Text,
     best,
 };
+use std::io;
 
 mod doc;
 mod mode;
@@ -80,9 +81,10 @@ impl Doc {
     }
 
     #[inline]
-    pub fn render(&self, width:uint) -> String {
+    pub fn render<W:io::Writer>(&self, width:uint, out:&mut W) -> io::IoResult<()> {
         let &Doc(ref doc) = self;
-        best(doc, width)
+        best(doc, width, out)
+            .and_then(|()| out.write_line(""))
     }
 
     #[inline]
