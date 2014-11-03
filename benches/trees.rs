@@ -8,6 +8,7 @@ extern crate pretty;
 use trees::{
     Tree,
 };
+use std::io;
 
 // custom mod imports
 #[path="../examples/trees.rs"]
@@ -30,8 +31,9 @@ fn bench(b:&mut test::Bencher) -> () {
         , Tree::new("ffff", ffffs)
         ];
     let example = Tree::new("aaa", aaas);
+    let mut out = io::util::NullWriter;
     let task = || {
-        example.pretty().render(70);
+        example.pretty().render(70, &mut out).unwrap();
     };
     b.iter(task);
 }

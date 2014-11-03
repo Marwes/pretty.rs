@@ -1,5 +1,6 @@
 use super::mode;
 use super::util;
+use std::io;
 
 #[deriving(Clone)]
 #[deriving(Show)]
@@ -67,14 +68,13 @@ fn fitting<'a>(next:Cmd<'a>,
 }
 
 #[inline(always)]
-pub fn best(doc:&Doc, width:uint) -> String {
-    let mut pos = 0u;
-    let mut result = String::new();
-
+pub fn best<W:io::Writer>(doc:&Doc, width:uint, out:&mut W) -> io::IoResult<()> {
+    let mut res   = Ok(());
+    let mut pos   = 0u;
     let mut bcmds = vec![(0, mode::Break, doc)];
     let mut fcmds = vec![];
 
-    loop {
+    while res.is_ok() {
         match bcmds.pop() {
             None => {
                 break;
@@ -106,16 +106,16 @@ pub fn best(doc:&Doc, width:uint) -> String {
                     bcmds.push((ind + off, mode, doc));
                 },
                 &Newline => {
-                    result.push_str(util::string::nl_spaces(ind).as_slice());
+                    res = out.write_str(util::string::nl_spaces(ind).as_slice());
                     pos = ind;
                 },
                 &Text(ref str) => {
-                    result.push_str(str.as_slice());
+                    res = out.write_str(str.as_slice());
                     pos += str.len();
                 },
             }
         }
     }
 
-    result
+    res
 }
