@@ -10,7 +10,7 @@ This library is based on Larsen's SML translation (https://github.com/kfl/wpp) o
 
 ## Documentation
 
-See the generated API documentation [here](http://jonsterling.github.io/rust-pretty/doc/pretty/).
+See the generated API documentation [here](http://www.rust-ci.org/jonsterling/rust-pretty/doc/pretty/).
 
 ## Requirements
 

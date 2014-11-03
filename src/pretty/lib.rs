@@ -1,7 +1,7 @@
 #![crate_name="pretty"]
 #![crate_type="rlib"]
 
-#![doc(html_root_url = "http://jonsterling.github.io/rust-pretty/doc/pretty/")]
+#![doc(html_root_url = "http://www.rust-ci.org/jonsterling/rust-pretty/doc/pretty/")]
 
 //! This crate defines a
 //! [Wadler-style](http://homepages.inf.ed.ac.uk/wadler/papers/prettier/prettier.pdf)
