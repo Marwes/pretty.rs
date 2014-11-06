@@ -1,8 +1,8 @@
-# rust-pretty
+# pretty.rs
 
 Wadler-style pretty-printing combinators in Rust
 
-[![build status](https://api.travis-ci.org/jonsterling/rust-pretty.svg?branch=master)](https://travis-ci.org/jonsterling/rust-pretty)
+[![build status](https://api.travis-ci.org/epsilonz/pretty.rs.svg?branch=master)](https://travis-ci.org/epsilonz/pretty.rs)
 
 ## Synopsis
 
@@ -10,7 +10,7 @@ This library is based on Larsen's SML translation (https://github.com/kfl/wpp) o
 
 ## Documentation
 
-See the generated API documentation [here](http://www.rust-ci.org/jonsterling/rust-pretty/doc/pretty/).
+See the generated API documentation [here](http://www.rust-ci.org/epsilonz/pretty.rs/doc/pretty/).
 
 ## Requirements
 
