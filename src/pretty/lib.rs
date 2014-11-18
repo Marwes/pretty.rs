@@ -8,13 +8,15 @@
 //! pretty-printing API.
 
 use doc::{
+    best,
+};
+use doc::Doc::{
     Append,
     Group,
     Nest,
     Newline,
     Nil,
     Text,
-    best,
 };
 use std::io;
 

@@ -1,6 +1,17 @@
-use super::mode;
+use super::mode::{
+    Mode,
+};
 use super::util;
 use std::io;
+
+pub use self::Doc::{
+    Nil,
+    Append,
+    Group,
+    Nest,
+    Newline,
+    Text,
+};
 
 #[deriving(Clone)]
 #[deriving(Show)]
@@ -13,7 +24,7 @@ pub enum Doc {
     Text(String),
 }
 
-type Cmd<'a> = (uint,mode::Mode,&'a Doc);
+type Cmd<'a> = (uint, Mode, &'a Doc);
 
 #[inline(always)]
 fn fitting<'a>(next:Cmd<'a>,
@@ -71,7 +82,7 @@ fn fitting<'a>(next:Cmd<'a>,
 pub fn best<W:io::Writer>(doc:&Doc, width:uint, out:&mut W) -> io::IoResult<()> {
     let mut res   = Ok(());
     let mut pos   = 0u;
-    let mut bcmds = vec![(0, mode::Break, doc)];
+    let mut bcmds = vec![(0, Mode::Break, doc)];
     let mut fcmds = vec![];
 
     while res.is_ok() {
@@ -87,18 +98,18 @@ pub fn best<W:io::Writer>(doc:&Doc, width:uint, out:&mut W) -> io::IoResult<()> 
                     bcmds.push((ind, mode, ldoc));
                 },
                 &Group(box ref doc) => match mode {
-                    mode::Flat => {
-                        bcmds.push((ind, mode::Flat, doc));
+                    Mode::Flat => {
+                        bcmds.push((ind, Mode::Flat, doc));
                     },
-                    mode::Break => {
-                        let next = (ind, mode::Flat, doc);
+                    Mode::Break => {
+                        let next = (ind, Mode::Flat, doc);
                         if fitting(next,
                                    &bcmds,
                                    &mut fcmds,
                                    width as int - pos as int) {
                             bcmds.push(next);
                         } else {
-                            bcmds.push((ind, mode::Break, doc));
+                            bcmds.push((ind, Mode::Break, doc));
                         }
                     }
                 },
