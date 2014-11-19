@@ -1,8 +1,10 @@
 [package]
 
-name = "pretty"
+name    = "pretty"
 version = "0.0.1"
-authors = ["Jonathan Sterling <jon@jonmsterling.com>"]
+authors = [ "Jonathan Sterling <jon@jonmsterling.com>",
+            "Darin Morrison <darinmorrison+epsilonz@gmail.com>"
+          ]
 
 [lib]
 doc     = true
