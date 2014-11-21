@@ -1,16 +1,20 @@
 [package]
 
-name    = "pretty"
+name = "pretty"
 version = "0.0.1"
-authors = [ "Jonathan Sterling <jon@jonmsterling.com>",
-            "Darin Morrison <darinmorrison+epsilonz@gmail.com>"
-          ]
+authors = [ "Jonathan Sterling <jon@jonmsterling.com>", "Darin Morrison <darinmorrison+epsilonz@gmail.com>" ]
+description = "Wadler-style pretty-printing combinators in Rust"
+documentation = "http://www.rust-ci.org/epsilonz/pretty.rs/doc/pretty/"
+keywords = ["functional-programming", "pretty-printing"]
+license = "MIT"
+readme = "README.md"
+repository = "https://github.com/epsilonz/pretty.rs"
 
 [lib]
-doc     = true
+doc = true
 doctest = false
-name    = "pretty"
-path    = "src/pretty/lib.rs"
+name = "pretty"
+path = "src/pretty/lib.rs"
 
 [[bin]]
 doc  = false
