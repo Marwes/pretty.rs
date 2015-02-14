@@ -1,6 +1,4 @@
-#[derive(Clone)]
-#[derive(Copy)]
-#[derive(Debug)]
+#[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
 pub enum Mode {
     Break,
     Flat,

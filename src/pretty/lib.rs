@@ -21,44 +21,36 @@ mod doc;
 mod mode;
 mod util;
 
-#[derive(Clone)]
-#[derive(Debug)]
+#[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
 pub struct Doc(doc::Doc);
 
 impl Doc {
-
     #[inline]
     pub fn nil() -> Doc {
         Doc(Nil)
     }
 
     #[inline]
-    pub fn append(self, that:Doc) -> Doc {
+    pub fn append(self, that: Doc) -> Doc {
         let Doc(ldoc) = self;
         let Doc(rdoc) = that;
         let res = match ldoc {
-            Nil => {
-                rdoc
-            },
+            Nil  => rdoc,
             ldoc => match rdoc {
-                Nil => {
-                    ldoc
-                },
-                rdoc => {
-                    Append(Box::new(ldoc), Box::new(rdoc))
-                },
+                Nil  => ldoc,
+                rdoc => Append(Box::new(ldoc), Box::new(rdoc)),
             }
         };
         Doc(res)
     }
 
     #[inline]
-    pub fn as_string<T:ToString>(t:T) -> Doc {
+    pub fn as_string<T: ToString>(t: T) -> Doc {
         Doc::text(t.to_string())
     }
 
     #[inline]
-    pub fn concat(ds:&[Doc]) -> Doc {
+    pub fn concat(ds: &[Doc]) -> Doc {
         ds.iter().fold(Doc::nil(), |a, b| a.append(b.clone()))
     }
 
@@ -69,7 +61,7 @@ impl Doc {
     }
 
     #[inline]
-    pub fn nest(self, off:usize) -> Doc {
+    pub fn nest(self, off: usize) -> Doc {
         let Doc(doc) = self;
         Doc(Nest(off, Box::new(doc)))
     }
@@ -80,15 +72,13 @@ impl Doc {
     }
 
     #[inline]
-    pub fn render<W:io::Writer>(&self, width:usize, out:&mut W) -> io::IoResult<()> {
+    pub fn render<W: io::Writer>(&self, width: usize, out: &mut W) -> io::IoResult<()> {
         let &Doc(ref doc) = self;
-        best(doc, width, out)
-            .and_then(|()| out.write_line(""))
+        best(doc, width, out).and_then(|()| out.write_line(""))
     }
 
     #[inline]
-    pub fn text<T:Str>(s:T) -> Doc {
+    pub fn text<T: Str>(s: T) -> Doc {
         Doc(Text(s.as_slice().to_string()))
     }
-
 }

@@ -13,8 +13,7 @@ pub use self::Doc::{
     Text,
 };
 
-#[derive(Clone)]
-#[derive(Debug)]
+#[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
 pub enum Doc {
     Nil,
     Append(Box<Doc>, Box<Doc>),
@@ -27,11 +26,12 @@ pub enum Doc {
 type Cmd<'a> = (usize, Mode, &'a Doc);
 
 #[inline(always)]
-fn fitting<'a>(next:Cmd<'a>,
-               bcmds:&Vec<Cmd<'a>>,
-               fcmds:&mut Vec<Cmd<'a>>,
-               mut rem:isize)
-               -> bool {
+fn fitting<'a>(
+       next: Cmd<'a>,
+      bcmds: &Vec<Cmd<'a>>,
+      fcmds: &mut Vec<Cmd<'a>>,
+    mut rem: isize
+) -> bool {
     let mut bidx = bcmds.len();
     let mut fits = true;
 
@@ -79,7 +79,11 @@ fn fitting<'a>(next:Cmd<'a>,
 }
 
 #[inline(always)]
-pub fn best<W:io::Writer>(doc:&Doc, width:usize, out:&mut W) -> io::IoResult<()> {
+pub fn best<W: io::Writer>(
+      doc: &Doc,
+    width: usize,
+      out: &mut W
+) -> io::IoResult<()> {
     let mut res   = Ok(());
     let mut pos   = 0;
     let mut bcmds = vec![(0, Mode::Break, doc)];
@@ -103,10 +107,8 @@ pub fn best<W:io::Writer>(doc:&Doc, width:usize, out:&mut W) -> io::IoResult<()>
                     },
                     Mode::Break => {
                         let next = (ind, Mode::Flat, &**doc);
-                        if fitting(next,
-                                   &bcmds,
-                                   &mut fcmds,
-                                   width as isize - pos as isize) {
+                        let rem  = width as isize - pos as isize;
+                        if fitting(next, &bcmds, &mut fcmds, rem) {
                             bcmds.push(next);
                         } else {
                             bcmds.push((ind, Mode::Break, doc));
