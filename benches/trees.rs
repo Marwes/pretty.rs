@@ -1,3 +1,8 @@
+#![feature(io)]
+#![feature(test)]
+
+#![allow(unused_attributes)]
+
 // external crates
 extern crate test;
 
@@ -17,20 +22,20 @@ mod trees;
 #[bench]
 fn bench(b:&mut test::Bencher) -> () {
     let bbbbbbs =
-        [ Tree::new("ccc", [])
-        , Tree::new("dd", [])
+        [ Tree::new("ccc", &[])
+        , Tree::new("dd", &[])
         ];
     let ffffs =
-        [ Tree::new("gg", [])
-        , Tree::new("hhh", [])
-        , Tree::new("ii", [])
+        [ Tree::new("gg", &[])
+        , Tree::new("hhh", &[])
+        , Tree::new("ii", &[])
         ];
     let aaas =
-        [ Tree::new("bbbbbb", bbbbbbs)
-        , Tree::new("eee", [])
-        , Tree::new("ffff", ffffs)
+        [ Tree::new("bbbbbb", &bbbbbbs)
+        , Tree::new("eee", &[])
+        , Tree::new("ffff", &ffffs)
         ];
-    let example = Tree::new("aaa", aaas);
+    let example = Tree::new("aaa", &aaas);
     let mut out = io::util::NullWriter;
     let task = || {
         example.pretty().render(70, &mut out).unwrap();
