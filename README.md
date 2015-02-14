@@ -30,4 +30,6 @@ See [Installing Rust](http://doc.rust-lang.org/guide.html#installing-rust) for f
 ```
 $ cargo build       ## build library and binary
 $ cargo run         ## run the example (pretty trees)
+$ cargo bench       ## run benchmarks
+$ cargo test        ## run tests
 ```
