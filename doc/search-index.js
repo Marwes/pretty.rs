@@ -1,0 +1,3 @@
+var searchIndex = {};
+searchIndex['pretty'] = {"items":[[0,"","pretty","This crate defines a\n[Wadler-style](http://homepages.inf.ed.ac.uk/wadler/papers/prettier/prettier.pdf)\npretty-printing API."],[3,"Doc","",""],[11,"partial_cmp","","",0],[11,"lt","","",0],[11,"le","","",0],[11,"gt","","",0],[11,"ge","","",0],[11,"eq","","",0],[11,"ne","","",0],[11,"cmp","","",0],[11,"fmt","","",0],[11,"clone","","",0],[11,"nil","","",0],[11,"append","","",0],[11,"as_string","","",0],[11,"concat","","",0],[11,"group","","",0],[11,"nest","","",0],[11,"newline","","",0],[11,"render","","",0],[11,"text","","",0]],"paths":[[3,"Doc"]]};
+initSearch(searchIndex);
