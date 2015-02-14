@@ -1,5 +1,6 @@
 #![crate_name="pretty"]
 #![crate_type="rlib"]
+#![feature(core, io)]
 
 #![doc(html_root_url = "http://www.rust-ci.org/epsilonz/pretty.rs/doc/pretty/")]
 
@@ -18,14 +19,14 @@ use doc::Doc::{
     Nil,
     Text,
 };
-use std::io;
+use std::old_io as io;
 
 mod doc;
 mod mode;
 mod util;
 
-#[deriving(Clone)]
-#[deriving(Show)]
+#[derive(Clone)]
+#[derive(Debug)]
 pub struct Doc(doc::Doc);
 
 impl Doc {
@@ -48,7 +49,7 @@ impl Doc {
                     ldoc
                 },
                 rdoc => {
-                    Append(box ldoc, box rdoc)
+                    Append(Box::new(ldoc), Box::new(rdoc))
                 },
             }
         };
@@ -68,13 +69,13 @@ impl Doc {
     #[inline]
     pub fn group(self) -> Doc {
         let Doc(doc) = self;
-        Doc(Group(box doc))
+        Doc(Group(Box::new(doc)))
     }
 
     #[inline]
-    pub fn nest(self, off:uint) -> Doc {
+    pub fn nest(self, off:usize) -> Doc {
         let Doc(doc) = self;
-        Doc(Nest(off, box doc))
+        Doc(Nest(off, Box::new(doc)))
     }
 
     #[inline]
@@ -83,15 +84,15 @@ impl Doc {
     }
 
     #[inline]
-    pub fn render<W:io::Writer>(&self, width:uint, out:&mut W) -> io::IoResult<()> {
+    pub fn render<W:io::Writer>(&self, width:usize, out:&mut W) -> io::IoResult<()> {
         let &Doc(ref doc) = self;
         best(doc, width, out)
             .and_then(|()| out.write_line(""))
     }
 
     #[inline]
-    pub fn text<T:Str>(str:T) -> Doc {
-        Doc(Text(String::from_str(str.as_slice())))
+    pub fn text<T:Str>(s:T) -> Doc {
+        Doc(Text(s.as_slice().to_string()))
     }
 
 }
