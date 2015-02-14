@@ -1,8 +1,4 @@
-#![crate_name="pretty"]
-#![crate_type="rlib"]
 #![feature(core, io)]
-
-#![doc(html_root_url = "http://www.rust-ci.org/epsilonz/pretty.rs/doc/pretty/")]
 
 //! This crate defines a
 //! [Wadler-style](http://homepages.inf.ed.ac.uk/wadler/papers/prettier/prettier.pdf)

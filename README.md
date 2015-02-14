@@ -10,7 +10,7 @@ This library is based on Larsen's SML translation (https://github.com/kfl/wpp) o
 
 ## Documentation
 
-See the generated API documentation [here](http://www.rust-ci.org/epsilonz/pretty.rs/doc/pretty/).
+See the generated API documentation [here](http://epsilonz.github.io/pretty.rs/doc/pretty/).
 
 ## Requirements
 
