@@ -2,7 +2,7 @@ use super::mode::{
     Mode,
 };
 use super::util;
-use std::io;
+use std::old_io as io;
 
 pub use self::Doc::{
     Nil,
@@ -13,24 +13,24 @@ pub use self::Doc::{
     Text,
 };
 
-#[deriving(Clone)]
-#[deriving(Show)]
+#[derive(Clone)]
+#[derive(Debug)]
 pub enum Doc {
     Nil,
     Append(Box<Doc>, Box<Doc>),
     Group(Box<Doc>),
-    Nest(uint, Box<Doc>),
+    Nest(usize, Box<Doc>),
     Newline,
     Text(String),
 }
 
-type Cmd<'a> = (uint, Mode, &'a Doc);
+type Cmd<'a> = (usize, Mode, &'a Doc);
 
 #[inline(always)]
 fn fitting<'a>(next:Cmd<'a>,
                bcmds:&Vec<Cmd<'a>>,
                fcmds:&mut Vec<Cmd<'a>>,
-               mut rem:int)
+               mut rem:isize)
                -> bool {
     let mut bidx = bcmds.len();
     let mut fits = true;
@@ -55,21 +55,21 @@ fn fitting<'a>(next:Cmd<'a>,
             Some((ind, mode, doc)) => match doc {
                 &Nil => {
                 },
-                &Append(box ref ldoc, box ref rdoc) => {
+                &Append(ref ldoc, ref rdoc) => {
                     fcmds.push((ind, mode, rdoc));
                     fcmds.push((ind, mode, ldoc));
                 },
-                &Group(box ref doc) => {
+                &Group(ref doc) => {
                     fcmds.push((ind, mode, doc));
                 },
-                &Nest(off, box ref doc) => {
+                &Nest(off, ref doc) => {
                     fcmds.push((ind + off, mode, doc));
                 },
                 &Newline => {
                     fits = true;
                 },
                 &Text(ref str) => {
-                    rem -= str.len() as int;
+                    rem -= str.len() as isize;
                 },
             }
         }
@@ -79,9 +79,9 @@ fn fitting<'a>(next:Cmd<'a>,
 }
 
 #[inline(always)]
-pub fn best<W:io::Writer>(doc:&Doc, width:uint, out:&mut W) -> io::IoResult<()> {
+pub fn best<W:io::Writer>(doc:&Doc, width:usize, out:&mut W) -> io::IoResult<()> {
     let mut res   = Ok(());
-    let mut pos   = 0u;
+    let mut pos   = 0;
     let mut bcmds = vec![(0, Mode::Break, doc)];
     let mut fcmds = vec![];
 
@@ -93,36 +93,36 @@ pub fn best<W:io::Writer>(doc:&Doc, width:uint, out:&mut W) -> io::IoResult<()> 
             Some((ind, mode, doc)) => match doc {
                 &Nil => {
                 },
-                &Append(box ref ldoc, box ref rdoc) => {
+                &Append(ref ldoc, ref rdoc) => {
                     bcmds.push((ind, mode, rdoc));
                     bcmds.push((ind, mode, ldoc));
                 },
-                &Group(box ref doc) => match mode {
+                &Group(ref doc) => match mode {
                     Mode::Flat => {
                         bcmds.push((ind, Mode::Flat, doc));
                     },
                     Mode::Break => {
-                        let next = (ind, Mode::Flat, doc);
+                        let next = (ind, Mode::Flat, &**doc);
                         if fitting(next,
                                    &bcmds,
                                    &mut fcmds,
-                                   width as int - pos as int) {
+                                   width as isize - pos as isize) {
                             bcmds.push(next);
                         } else {
                             bcmds.push((ind, Mode::Break, doc));
                         }
                     }
                 },
-                &Nest(off, box ref doc) => {
+                &Nest(off, ref doc) => {
                     bcmds.push((ind + off, mode, doc));
                 },
                 &Newline => {
-                    res = out.write_str(util::string::nl_spaces(ind).as_slice());
+                    res = out.write_str(&util::string::nl_spaces(ind));
                     pos = ind;
                 },
-                &Text(ref str) => {
-                    res = out.write_str(str.as_slice());
-                    pos += str.len();
+                &Text(ref s) => {
+                    res = out.write_str(&s);
+                    pos += s.len();
                 },
             }
         }

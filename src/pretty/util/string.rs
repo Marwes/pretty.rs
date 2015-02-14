@@ -1,11 +1,12 @@
 #[inline]
-pub fn spaces(n:uint) -> String {
-    String::from_char(n, ' ')
+pub fn spaces(n:usize) -> String {
+    use std::iter;
+    iter::repeat(' ').take(n).collect()
 }
 
 #[inline]
-pub fn nl_spaces(n:uint) -> String {
-    let mut str = String::from_str("\n");
-    str.push_str(spaces(n).as_slice());
-    str
+pub fn nl_spaces(n:usize) -> String {
+    let mut s = "\n".to_string();
+    s.push_str(&spaces(n));
+    s
 }

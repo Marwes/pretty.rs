@@ -1,13 +1,15 @@
+#![feature(io)]
+
 extern crate pretty;
 
 use pretty::{
     Doc
 };
-use std::io;
+use std::old_io as io;
 use std::str;
 
-#[deriving(Clone)]
-#[deriving(Show)]
+#[derive(Clone)]
+#[derive(Debug)]
 pub struct Tree<'a> {
     node:String,
     subtrees:&'a[Tree<'a>]
@@ -16,7 +18,7 @@ pub struct Tree<'a> {
 impl<'a> Tree<'a> {
     pub fn new(node:&str, subtrees:&'a[Tree<'a>]) -> Tree<'a> {
         Tree {
-            node: String::from_str(node),
+            node: node.to_string(),
             subtrees: subtrees
         }
     }
@@ -95,7 +97,7 @@ pub fn main() {
                 println!(
                     "{}",
                     str::from_utf8(
-                        out.clone().unwrap().as_slice()
+                        out.clone().get_ref()
                     ).unwrap_or("<buffer is not a utf-8 encoded string>")
                 )
             })

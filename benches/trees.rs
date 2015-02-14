@@ -8,7 +8,7 @@ extern crate pretty;
 use trees::{
     Tree,
 };
-use std::io;
+use std::old_io as io;
 
 // custom mod imports
 #[path="../examples/trees.rs"]
