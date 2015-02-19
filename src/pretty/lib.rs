@@ -1,4 +1,6 @@
-#![feature(core, io)]
+#![feature(collections)]
+#![feature(core)]
+#![feature(io)]
 
 //! This crate defines a
 //! [Wadler-style](http://homepages.inf.ed.ac.uk/wadler/papers/prettier/prettier.pdf)

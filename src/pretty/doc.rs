@@ -17,7 +17,7 @@ fn spaces(n: usize) -> String {
 
 #[inline]
 fn nl_spaces(n: usize) -> String {
-    let mut s = "\n".to_string();
+    let mut s = String::from_str("\n");
     s.push_str(&spaces(n));
     s
 }
