@@ -18,8 +18,6 @@ use doc::Doc::{
 use std::old_io as io;
 
 mod doc;
-mod mode;
-mod util;
 
 #[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
 pub struct Doc(doc::Doc);

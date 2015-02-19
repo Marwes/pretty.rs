@@ -1,7 +1,3 @@
-use super::mode::{
-    Mode,
-};
-use super::util;
 use std::old_io as io;
 
 pub use self::Doc::{
@@ -12,6 +8,25 @@ pub use self::Doc::{
     Newline,
     Text,
 };
+
+#[inline]
+fn spaces(n: usize) -> String {
+    use std::iter;
+    iter::repeat(' ').take(n).collect()
+}
+
+#[inline]
+fn nl_spaces(n: usize) -> String {
+    let mut s = "\n".to_string();
+    s.push_str(&spaces(n));
+    s
+}
+
+#[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
+enum Mode {
+    Break,
+    Flat,
+}
 
 #[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
 pub enum Doc {
@@ -119,7 +134,7 @@ pub fn best<W: io::Writer>(
                     bcmds.push((ind + off, mode, doc));
                 },
                 &Newline => {
-                    res = out.write_str(&util::string::nl_spaces(ind as usize));
+                    res = out.write_str(&nl_spaces(ind as usize));
                     pos = ind;
                 },
                 &Text(ref s) => {
