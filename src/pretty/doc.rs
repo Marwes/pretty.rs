@@ -25,7 +25,7 @@ pub enum Doc {
 
 type Cmd<'a> = (usize, Mode, &'a Doc);
 
-#[inline(always)]
+#[inline]
 fn fitting<'a>(
        next: Cmd<'a>,
       bcmds: &Vec<Cmd<'a>>,
@@ -78,7 +78,7 @@ fn fitting<'a>(
     fits
 }
 
-#[inline(always)]
+#[inline]
 pub fn best<W: io::Writer>(
       doc: &Doc,
     width: usize,
