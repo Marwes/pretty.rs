@@ -18,19 +18,19 @@ pub enum Doc {
     Nil,
     Append(Box<Doc>, Box<Doc>),
     Group(Box<Doc>),
-    Nest(usize, Box<Doc>),
+    Nest(u64, Box<Doc>),
     Newline,
     Text(String),
 }
 
-type Cmd<'a> = (usize, Mode, &'a Doc);
+type Cmd<'a> = (u64, Mode, &'a Doc);
 
 #[inline]
 fn fitting<'a>(
        next: Cmd<'a>,
       bcmds: &Vec<Cmd<'a>>,
       fcmds: &mut Vec<Cmd<'a>>,
-    mut rem: isize
+    mut rem: i64
 ) -> bool {
     let mut bidx = bcmds.len();
     let mut fits = true;
@@ -69,7 +69,7 @@ fn fitting<'a>(
                     fits = true;
                 },
                 &Text(ref str) => {
-                    rem -= str.len() as isize;
+                    rem -= str.len() as i64;
                 },
             }
         }
@@ -81,7 +81,7 @@ fn fitting<'a>(
 #[inline]
 pub fn best<W: io::Writer>(
       doc: &Doc,
-    width: usize,
+    width: u64,
       out: &mut W
 ) -> io::IoResult<()> {
     let mut res   = Ok(());
@@ -107,7 +107,7 @@ pub fn best<W: io::Writer>(
                     },
                     Mode::Break => {
                         let next = (ind, Mode::Flat, &**doc);
-                        let rem  = width as isize - pos as isize;
+                        let rem  = width as i64 - pos as i64;
                         if fitting(next, &bcmds, &mut fcmds, rem) {
                             bcmds.push(next);
                         } else {
@@ -119,12 +119,12 @@ pub fn best<W: io::Writer>(
                     bcmds.push((ind + off, mode, doc));
                 },
                 &Newline => {
-                    res = out.write_str(&util::string::nl_spaces(ind));
+                    res = out.write_str(&util::string::nl_spaces(ind as usize));
                     pos = ind;
                 },
                 &Text(ref s) => {
                     res = out.write_str(&s);
-                    pos += s.len();
+                    pos += s.len() as u64;
                 },
             }
         }
