@@ -27,8 +27,8 @@ type Cmd<'a> = (u64, Mode, &'a Doc);
 
 #[inline]
 fn fitting<'a>(
-       next: Cmd<'a>,
-      bcmds: &Vec<Cmd<'a>>,
+       next:          Cmd<'a>,
+      bcmds: &    Vec<Cmd<'a>>,
       fcmds: &mut Vec<Cmd<'a>>,
     mut rem: i64
 ) -> bool {
@@ -123,7 +123,7 @@ pub fn best<W: io::Writer>(
                     pos = ind;
                 },
                 &Text(ref s) => {
-                    res = out.write_str(&s);
+                    res  = out.write_str(&s);
                     pos += s.len() as u64;
                 },
             }
