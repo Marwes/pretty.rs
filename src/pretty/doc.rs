@@ -85,8 +85,8 @@ pub fn best<W: io::Writer>(
       out: &mut W
 ) -> io::IoResult<()> {
     let mut res   = Ok(());
-    let mut pos   = 0;
-    let mut bcmds = vec![(0, Mode::Break, doc)];
+    let mut pos   = 0u64;
+    let mut bcmds = vec![(0u64, Mode::Break, doc)];
     let mut fcmds = vec![];
 
     while res.is_ok() {
