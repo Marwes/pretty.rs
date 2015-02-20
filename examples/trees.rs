@@ -8,99 +8,114 @@ use pretty::{
 use std::old_io as io;
 use std::str;
 
-#[derive(Clone)]
-#[derive(Debug)]
-pub struct Tree<'a> {
-    node:String,
-    subtrees:&'a[Tree<'a>]
-}
+#[derive(Clone, Debug)]
+pub struct Forest<'a>(&'a [Tree<'a>]);
 
-impl<'a> Tree<'a> {
-    pub fn new(node:&str, subtrees:&'a[Tree<'a>]) -> Tree<'a> {
-        Tree {
-            node: node.to_string(),
-            subtrees: subtrees
+impl<'a> Forest<'a> {
+    fn forest(forest: &'a [Tree<'a>]) -> Forest<'a> {
+        Forest(forest)
+    }
+
+    fn nil() -> Forest<'a> {
+        Forest(&[])
+    }
+
+    fn bracket(&self) -> Doc {
+        if (self.0).len() == 0 {
+            Doc::nil()
+        } else {
+            Doc::text("[")
+                .append(
+                    Doc::newline()
+                        .append(self.pretty())
+                        .nest(2))
+                .append(Doc::newline())
+                .append(Doc::text("]"))
         }
     }
 
-    fn pretty_trees(trees:&'a[Tree<'a>]) -> Doc {
-        match trees {
+    fn pretty(&self) -> Doc {
+        match self.0 {
             [] => panic!(),
             [ref t] => t.pretty(),
             [ref t, ref ts..] => {
-                t.pretty().append(
-                    Doc::text(",")
-                ).append(
-                    Doc::newline()
-                ).append(
-                    Tree::pretty_trees(*ts)
-                )
+                t.pretty()
+                    .append(Doc::text(","))
+                    .append(Doc::newline())
+                    .append(Forest(ts).pretty())
             }
         }
     }
+}
 
-    fn pretty_bracket(ts:&'a[Tree<'a>]) -> Doc {
-        match ts {
-            [] => Doc::nil(),
-            ts => {
-                Doc::text("[").append(
-                    Doc::newline().append(
-                        Tree::pretty_trees(ts)
-                    ).nest(2)
-                ).append(
-                    Doc::newline()
-                ).append(
-                    Doc::text("]")
-                )
-            }
+#[derive(Clone, Debug)]
+pub struct Tree<'a> {
+    node: String,
+    forest: Forest<'a>,
+}
+
+impl<'a> Tree<'a> {
+    pub fn node(node: &str) -> Tree<'a> {
+        Tree {
+            node: node.to_string(),
+            forest: Forest::nil(),
+        }
+    }
+
+    pub fn node_with_forest(node: &str, forest: &'a [Tree<'a>]) -> Tree<'a> {
+        Tree {
+            node: node.to_string(),
+            forest: Forest::forest(forest),
         }
     }
 
     pub fn pretty(&self) -> Doc {
-        Doc::text(
-            self.node.clone()
-        ).append(
-            Tree::pretty_bracket(
-                self.subtrees
-            )
-        ).group()
+        Doc::text(self.node.clone())
+            .append((self.forest).bracket())
+            .group()
     }
 }
 
 #[allow(dead_code)]
 pub fn main() {
-    let bbbbbbs =
-        [ Tree::new("ccc", &[])
-        , Tree::new("dd", &[])
-        ];
-    let ffffs =
-        [ Tree::new("gg", &[])
-        , Tree::new("hhh", &[])
-        , Tree::new("ii", &[])
-        ];
-    let aaas =
-        [ Tree::new("bbbbbb", &bbbbbbs)
-        , Tree::new("eee", &[])
-        , Tree::new("ffff", &ffffs)
-        ];
-    let example = Tree::new("aaaa", &aaas);
+    let bbbbbbs = [
+        Tree::node("ccc"),
+        Tree::node("dd"),
+    ];
+    let ffffs = [
+        Tree::node("gg"),
+        Tree::node("hhh"),
+        Tree::node("ii"),
+    ];
+    let aaas = [
+        Tree::node_with_forest("bbbbbb", &bbbbbbs),
+        Tree::node("eee"),
+        Tree::node_with_forest("ffff", &ffffs),
+    ];
+    let example = Tree::node_with_forest("aaaa", &aaas);
 
+    let err_msg = "<buffer is not a utf-8 encoded string>";
+
+    // try writing to stdout
     {
         print!("\nwriting to stdout directly:\n");
         let mut out = io::stdout();
-        example.pretty().render(70, &mut out)
+        example
+            .pretty()
+            .render(70, &mut out)
+    // try writing to memory
     }.and_then(|()| {
         print!("\nwriting to string then printing:\n");
-        let mut out = io::MemWriter::new();
-        example.pretty().render(70, &mut out)
+        let mut mem = io::MemWriter::new();
+        example
+            .pretty()
+            .render(70, &mut mem)
+            // print to console from memory
             .map(|()| {
-                println!(
-                    "{}",
-                    str::from_utf8(
-                        out.clone().get_ref()
-                    ).unwrap_or("<buffer is not a utf-8 encoded string>")
-                )
+                let res = str::from_utf8(mem.get_ref()).unwrap_or(err_msg);
+                println!("{}", res)
             })
+    // print an error if anything failed
     }).unwrap_or_else(|err| {
         println!("error: {}", err)
     });

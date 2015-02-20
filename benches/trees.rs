@@ -20,7 +20,7 @@ use std::old_io as io;
 mod trees;
 
 #[bench]
-fn bench(b:&mut test::Bencher) -> () {
+fn bench(b: &mut test::Bencher) -> () {
     let bbbbbbs =
         [ Tree::new("ccc", &[])
         , Tree::new("dd", &[])
