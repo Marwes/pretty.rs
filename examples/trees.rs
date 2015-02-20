@@ -45,7 +45,6 @@ impl<'a> Forest<'a> {
                     .append(forest[i].pretty()
                             .append(Doc::text(","))
                             .append(Doc::newline()));
-
             }
             else if i == k {
                 doc = doc
