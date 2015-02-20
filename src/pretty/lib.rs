@@ -64,7 +64,7 @@ impl<'a> Doc<'a> {
     }
 
     #[inline]
-    pub fn nest(self, off: u64) -> Doc<'a> {
+    pub fn nest(self, off: usize) -> Doc<'a> {
         let Doc(doc) = self;
         Doc(Nest(off, Box::new(doc)))
     }
@@ -75,7 +75,7 @@ impl<'a> Doc<'a> {
     }
 
     #[inline]
-    pub fn render<W: io::Writer>(&self, width: u64, out: &mut W) -> io::IoResult<()> {
+    pub fn render<W: io::Writer>(&self, width: usize, out: &mut W) -> io::IoResult<()> {
         let &Doc(ref doc) = self;
         best(doc, width, out).and_then(|()| out.write_line(""))
     }

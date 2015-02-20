@@ -33,19 +33,19 @@ pub enum Doc<'a> {
     Nil,
     Append(Box<Doc<'a>>, Box<Doc<'a>>),
     Group(Box<Doc<'a>>),
-    Nest(u64, Box<Doc<'a>>),
+    Nest(usize, Box<Doc<'a>>),
     Newline,
     Text(::std::string::CowString<'a>),
 }
 
-type Cmd<'a> = (u64, Mode, &'a Doc<'a>);
+type Cmd<'a> = (usize, Mode, &'a Doc<'a>);
 
 #[inline]
 fn fitting<'a>(
        next:          Cmd<'a>,
       bcmds: &    Vec<Cmd<'a>>,
       fcmds: &mut Vec<Cmd<'a>>,
-    mut rem: i64
+    mut rem: isize
 ) -> bool {
     let mut bidx = bcmds.len();
     let mut fits = true;
@@ -84,7 +84,7 @@ fn fitting<'a>(
                     fits = true;
                 },
                 &Text(ref str) => {
-                    rem -= str.len() as i64;
+                    rem -= str.len() as isize;
                 },
             }
         }
@@ -96,12 +96,12 @@ fn fitting<'a>(
 #[inline]
 pub fn best<W: io::Writer>(
       doc: &Doc,
-    width: u64,
+    width: usize,
       out: &mut W
 ) -> io::IoResult<()> {
     let mut res   = Ok(());
-    let mut pos   = 0u64;
-    let mut bcmds = vec![(0u64, Mode::Break, doc)];
+    let mut pos   = 0us;
+    let mut bcmds = vec![(0us, Mode::Break, doc)];
     let mut fcmds = vec![];
 
     while res.is_ok() {
@@ -122,7 +122,7 @@ pub fn best<W: io::Writer>(
                     },
                     Mode::Break => {
                         let next = (ind, Mode::Flat, &**doc);
-                        let rem  = width as i64 - pos as i64;
+                        let rem  = width as isize - pos as isize;
                         if fitting(next, &bcmds, &mut fcmds, rem) {
                             bcmds.push(next);
                         } else {
@@ -134,12 +134,12 @@ pub fn best<W: io::Writer>(
                     bcmds.push((ind + off, mode, doc));
                 },
                 &Newline => {
-                    res = out.write_str(&nl_spaces(ind as usize));
+                    res = out.write_str(&nl_spaces(ind));
                     pos = ind;
                 },
                 &Text(ref s) => {
                     res  = out.write_str(&s);
-                    pos += s.len() as u64;
+                    pos += s.len();
                 },
             }
         }
