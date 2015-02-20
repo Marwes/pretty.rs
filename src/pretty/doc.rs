@@ -29,16 +29,16 @@ enum Mode {
 }
 
 #[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
-pub enum Doc {
+pub enum Doc<'a> {
     Nil,
-    Append(Box<Doc>, Box<Doc>),
-    Group(Box<Doc>),
-    Nest(u64, Box<Doc>),
+    Append(Box<Doc<'a>>, Box<Doc<'a>>),
+    Group(Box<Doc<'a>>),
+    Nest(u64, Box<Doc<'a>>),
     Newline,
-    Text(String),
+    Text(::std::string::CowString<'a>),
 }
 
-type Cmd<'a> = (u64, Mode, &'a Doc);
+type Cmd<'a> = (u64, Mode, &'a Doc<'a>);
 
 #[inline]
 fn fitting<'a>(

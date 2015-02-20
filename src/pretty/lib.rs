@@ -18,20 +18,23 @@ use doc::Doc::{
     Text,
 };
 use std::old_io as io;
+use std::borrow::{
+    IntoCow,
+};
 
 mod doc;
 
 #[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
-pub struct Doc(doc::Doc);
+pub struct Doc<'a>(doc::Doc<'a>);
 
-impl Doc {
+impl<'a> Doc<'a> {
     #[inline]
-    pub fn nil() -> Doc {
+    pub fn nil() -> Doc<'a> {
         Doc(Nil)
     }
 
     #[inline]
-    pub fn append(self, that: Doc) -> Doc {
+    pub fn append(self, that: Doc<'a>) -> Doc<'a> {
         let Doc(ldoc) = self;
         let Doc(rdoc) = that;
         let res = match ldoc {
@@ -45,29 +48,29 @@ impl Doc {
     }
 
     #[inline]
-    pub fn as_string<T: ToString>(t: T) -> Doc {
+    pub fn as_string<T: ToString>(t: T) -> Doc<'a> {
         Doc::text(t.to_string())
     }
 
     #[inline]
-    pub fn concat(ds: &[Doc]) -> Doc {
+    pub fn concat(ds: &[Doc<'a>]) -> Doc<'a> {
         ds.iter().fold(Doc::nil(), |a, b| a.append(b.clone()))
     }
 
     #[inline]
-    pub fn group(self) -> Doc {
+    pub fn group(self) -> Doc<'a> {
         let Doc(doc) = self;
         Doc(Group(Box::new(doc)))
     }
 
     #[inline]
-    pub fn nest(self, off: u64) -> Doc {
+    pub fn nest(self, off: u64) -> Doc<'a> {
         let Doc(doc) = self;
         Doc(Nest(off, Box::new(doc)))
     }
 
     #[inline]
-    pub fn newline() -> Doc {
+    pub fn newline() -> Doc<'a> {
         Doc(Newline)
     }
 
@@ -78,7 +81,7 @@ impl Doc {
     }
 
     #[inline]
-    pub fn text<T: Str>(s: T) -> Doc {
-        Doc(Text(s.as_slice().to_string()))
+    pub fn text<T: IntoCow<'a, String, str>>(data: T) -> Doc<'a> {
+        Doc(Text(data.into_cow()))
     }
 }

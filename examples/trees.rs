@@ -35,16 +35,26 @@ impl<'a> Forest<'a> {
     }
 
     fn pretty(&self) -> Doc {
-        match self.0 {
-            [] => panic!(),
-            [ref t] => t.pretty(),
-            [ref t, ref ts..] => {
-                t.pretty()
-                    .append(Doc::text(","))
-                    .append(Doc::newline())
-                    .append(Forest(ts).pretty())
+        let forest = self.0;
+        let mut doc = Doc::nil();
+        let mut i = 0;
+        let k = forest.len() - 1;
+        loop {
+            if i < k {
+                doc = doc
+                    .append(forest[i].pretty()
+                            .append(Doc::text(","))
+                            .append(Doc::newline()));
+
             }
+            else if i == k {
+                doc = doc
+                    .append(forest[i].pretty());
+                break
+            }
+            i += 1;
         }
+        doc
     }
 }
 
