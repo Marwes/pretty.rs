@@ -1,12 +1,20 @@
 # pretty.rs
 
-Wadler-style pretty-printing combinators in Rust
+Pretty printing combinators for Rust
 
 [![build status](https://api.travis-ci.org/epsilonz/pretty.rs.svg?branch=master)](https://travis-ci.org/epsilonz/pretty.rs)
 
 ## Synopsis
 
-This library is based on Larsen's SML translation (https://github.com/kfl/wpp) of Wadler's Haskell pretty printer (http://homepages.inf.ed.ac.uk/wadler/papers/prettier/prettier.pdf).
+This crate provides functionality for defining pretty printers. It is
+particularly useful for printing structured recursive data like trees.
+
+The implementation was originally based on Larsen's SML translation
+(https://github.com/kfl/wpp) of Wadler's Haskell pretty printer
+(http://homepages.inf.ed.ac.uk/wadler/papers/prettier/prettier.pdf). It
+has since been modified in various ways to better fit Rust's
+programming model. In particular, it uses iteration rather than
+recursion and provides streaming output.
 
 ## Documentation
 
