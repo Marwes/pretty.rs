@@ -1,4 +1,4 @@
-#![feature(io)]
+#![feature(old_io)]
 #![feature(test)]
 
 #![allow(unused_attributes)]
