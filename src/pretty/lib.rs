@@ -80,7 +80,7 @@ impl<'a> Doc<'a> {
     }
 
     #[inline]
-    pub fn text<T: IntoCow<'a, String, str>>(data: T) -> Doc<'a> {
+    pub fn text<T: IntoCow<'a, str>>(data: T) -> Doc<'a> {
         Doc(Text(data.into_cow()))
     }
 }
