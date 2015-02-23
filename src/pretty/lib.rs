@@ -1,5 +1,4 @@
 #![feature(collections)]
-#![feature(core)]
 #![feature(old_io)]
 
 //! This crate defines a
