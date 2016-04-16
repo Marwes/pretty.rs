@@ -1,11 +1,9 @@
-#![feature(old_io)]
-
 extern crate pretty;
 
 use pretty::{
     Doc
 };
-use std::old_io as io;
+use std::io;
 use std::str;
 
 #[derive(Clone, Debug)]
@@ -115,13 +113,13 @@ pub fn main() {
     // try writing to memory
     }.and_then(|()| {
         print!("\nwriting to string then printing:\n");
-        let mut mem = io::MemWriter::new();
+        let mut mem = Vec::new();
         example
             .pretty()
             .render(70, &mut mem)
             // print to console from memory
             .map(|()| {
-                let res = str::from_utf8(mem.get_ref()).unwrap_or(err_msg);
+                let res = str::from_utf8(&mem).unwrap_or(err_msg);
                 println!("{}", res)
             })
     // print an error if anything failed

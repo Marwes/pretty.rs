@@ -1,6 +1,3 @@
-#![feature(collections)]
-#![feature(old_io)]
-
 //! This crate defines a
 //! [Wadler-style](http://homepages.inf.ed.ac.uk/wadler/papers/prettier/prettier.pdf)
 //! pretty-printing API.
@@ -16,10 +13,8 @@ use doc::Doc::{
     Nil,
     Text,
 };
-use std::old_io as io;
-use std::borrow::{
-    IntoCow,
-};
+use std::io;
+use std::borrow::Cow;
 
 mod doc;
 
@@ -74,13 +69,13 @@ impl<'a> Doc<'a> {
     }
 
     #[inline]
-    pub fn render<W: io::Writer>(&self, width: usize, out: &mut W) -> io::IoResult<()> {
+    pub fn render<W: io::Write>(&self, width: usize, out: &mut W) -> io::Result<()> {
         let &Doc(ref doc) = self;
-        best(doc, width, out).and_then(|()| out.write_line(""))
+        best(doc, width, out).and_then(|()| out.write_all(b"\n"))
     }
 
     #[inline]
-    pub fn text<T: IntoCow<'a, str>>(data: T) -> Doc<'a> {
-        Doc(Text(data.into_cow()))
+    pub fn text<T: Into<Cow<'a, str>>>(data: T) -> Doc<'a> {
+        Doc(Text(data.into()))
     }
 }
