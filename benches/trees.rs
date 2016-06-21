@@ -1,19 +1,11 @@
 #![feature(test)]
 
-#![allow(unused_attributes)]
-
-// external crates
 extern crate test;
-
-// local crates
 extern crate pretty;
-
-// local mod imports
 use trees::{
     Tree,
 };
 
-// custom mod imports
 #[path="../examples/trees.rs"]
 mod trees;
 
