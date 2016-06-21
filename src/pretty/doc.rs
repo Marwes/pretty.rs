@@ -42,17 +42,15 @@ type Cmd<'a> = (usize, Mode, &'a Doc<'a>);
 
 #[inline]
 fn fitting<'a>(
-       next:          Cmd<'a>,
-      bcmds: &    Vec<Cmd<'a>>,
-      fcmds: &mut Vec<Cmd<'a>>,
-    mut rem: isize
+    next: Cmd<'a>,
+    bcmds: &Vec<Cmd<'a>>,
+    fcmds: &mut Vec<Cmd<'a>>,
+    mut rem: isize,
 ) -> bool {
     let mut bidx = bcmds.len();
     let mut fits = true;
-
     fcmds.clear();      // clear from previous calls from best
     fcmds.push(next);
-
     loop {
         if rem < 0 {
             fits = false;
@@ -89,20 +87,18 @@ fn fitting<'a>(
             }
         }
     }
-
     fits
 }
 
 #[inline]
 pub fn best<W: io::Write>(
-      doc: &Doc,
+    doc: &Doc,
     width: usize,
-      out: &mut W
+    out: &mut W,
 ) -> io::Result<()> {
-    let mut pos   = 0usize;
+    let mut pos = 0usize;
     let mut bcmds = vec![(0usize, Mode::Break, doc)];
     let mut fcmds = vec![];
-
     loop {
         match bcmds.pop() {
             None => {
@@ -121,7 +117,7 @@ pub fn best<W: io::Write>(
                     },
                     Mode::Break => {
                         let next = (ind, Mode::Flat, &**doc);
-                        let rem  = width as isize - pos as isize;
+                        let rem = width as isize - pos as isize;
                         if fitting(next, &bcmds, &mut fcmds, rem) {
                             bcmds.push(next);
                         } else {
