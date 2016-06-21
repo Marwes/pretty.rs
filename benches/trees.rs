@@ -1,4 +1,3 @@
-#![feature(old_io)]
 #![feature(test)]
 
 #![allow(unused_attributes)]
@@ -13,7 +12,6 @@ extern crate pretty;
 use trees::{
     Tree,
 };
-use std::old_io as io;
 
 // custom mod imports
 #[path="../examples/trees.rs"]
@@ -36,7 +34,7 @@ fn bench(b: &mut test::Bencher) -> () {
         , Tree::node_with_forest("ffff", &ffffs)
         ];
     let example = Tree::node_with_forest("aaa", &aaas);
-    let mut out = io::util::NullWriter;
+    let mut out = std::io::sink();
     let task = || {
         example.pretty().render(70, &mut out).unwrap();
     };
