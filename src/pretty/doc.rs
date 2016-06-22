@@ -49,7 +49,7 @@ fn fitting<'a>(
 ) -> bool {
     let mut bidx = bcmds.len();
     let mut fits = true;
-    fcmds.clear();      // clear from previous calls from best
+    fcmds.clear(); // clear from previous calls from best
     fcmds.push(next);
     loop {
         if rem < 0 {
