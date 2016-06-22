@@ -2,8 +2,6 @@
 
 Pretty printing combinators for Rust
 
-[![build status](https://api.travis-ci.org/epsilonz/pretty.rs.svg?branch=master)](https://travis-ci.org/epsilonz/pretty.rs)
-
 ## Synopsis
 
 This crate provides functionality for defining pretty printers. It is
