@@ -16,7 +16,7 @@ fn spaces(n: usize) -> String {
 }
 
 #[inline]
-fn nl_spaces(n: usize) -> String {
+fn spaces_then_newline(n: usize) -> String {
     let mut s = String::from("\n");
     s.push_str(&spaces(n));
     s
@@ -129,7 +129,7 @@ pub fn best<W: io::Write>(
                     bcmds.push((ind + off, mode, doc));
                 },
                 &Newline => {
-                    try!(out.write_all(nl_spaces(ind).as_bytes()));
+                    try!(out.write_all(spaces_then_newline(ind).as_bytes()));
                     pos = ind;
                 },
                 &Text(ref s) => {

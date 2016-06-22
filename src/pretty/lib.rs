@@ -47,8 +47,8 @@ impl<'a> Doc<'a> {
     }
 
     #[inline]
-    pub fn concat(ds: &[Doc<'a>]) -> Doc<'a> {
-        ds.iter().fold(Doc::nil(), |a, b| a.append(b.clone()))
+    pub fn concat(docs: &[Doc<'a>]) -> Doc<'a> {
+        docs.iter().fold(Doc::nil(), |a, b| a.append(b.clone()))
     }
 
     #[inline]
@@ -58,9 +58,9 @@ impl<'a> Doc<'a> {
     }
 
     #[inline]
-    pub fn nest(self, off: usize) -> Doc<'a> {
+    pub fn nest(self, offset: usize) -> Doc<'a> {
         let Doc(doc) = self;
-        Doc(Nest(off, Box::new(doc)))
+        Doc(Nest(offset, Box::new(doc)))
     }
 
     #[inline]
