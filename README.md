@@ -16,7 +16,7 @@ recursion and provides streaming output.
 
 ## Documentation
 
-See the generated API documentation [here](http://epsilonz.github.io/pretty.rs/doc/pretty/).
+See the generated API documentation [here](http://freebroccolo.github.io/pretty.rs/doc/pretty/).
 
 ## Requirements
 
