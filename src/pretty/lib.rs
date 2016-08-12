@@ -15,30 +15,36 @@ use doc::Doc::{
 };
 use std::io;
 use std::borrow::Cow;
+use std::ops::Deref;
 
 mod doc;
 
 #[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
-pub struct Doc<'a>(doc::Doc<'a>);
+pub struct Doc<'a>(Box<doc::Doc<'a, Doc<'a>>>);
+
+impl<'a> Deref for Doc<'a> {
+    type Target = doc::Doc<'a, Doc<'a>>;
+    
+    fn deref(&self) -> &doc::Doc<'a, Doc<'a>> {
+        &self.0
+    }
+}
 
 impl<'a> Doc<'a> {
     #[inline]
     pub fn nil() -> Doc<'a> {
-        Doc(Nil)
+        Doc(Box::new(Nil))
     }
 
     #[inline]
     pub fn append(self, that: Doc<'a>) -> Doc<'a> {
-        let Doc(ldoc) = self;
-        let Doc(rdoc) = that;
-        let res = match ldoc {
-            Nil  => rdoc,
-            ldoc => match rdoc {
-                Nil  => ldoc,
-                rdoc => Append(Box::new(ldoc), Box::new(rdoc)),
+        match &*self {
+            &Nil  => that,
+            _ => match &*that {
+                &Nil  => self,
+                _ => Doc(Box::new(Append(self, that))),
             }
-        };
-        Doc(res)
+        }
     }
 
     #[inline]
@@ -53,19 +59,17 @@ impl<'a> Doc<'a> {
 
     #[inline]
     pub fn group(self) -> Doc<'a> {
-        let Doc(doc) = self;
-        Doc(Group(Box::new(doc)))
+        Doc(Box::new(Group(self)))
     }
 
     #[inline]
     pub fn nest(self, offset: usize) -> Doc<'a> {
-        let Doc(doc) = self;
-        Doc(Nest(offset, Box::new(doc)))
+        Doc(Box::new(Nest(offset, self)))
     }
 
     #[inline]
     pub fn newline() -> Doc<'a> {
-        Doc(Newline)
+        Doc(Box::new(Newline))
     }
 
     #[inline]
@@ -76,6 +80,6 @@ impl<'a> Doc<'a> {
 
     #[inline]
     pub fn text<T: Into<Cow<'a, str>>>(data: T) -> Doc<'a> {
-        Doc(Text(data.into()))
+        Doc(Box::new(Text(data.into())))
     }
 }

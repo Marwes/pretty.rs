@@ -1,4 +1,5 @@
 use std::io;
+use std::ops::Deref;
 
 pub use self::Doc::{
     Nil,
@@ -29,24 +30,26 @@ enum Mode {
 }
 
 #[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
-pub enum Doc<'a> {
+pub enum Doc<'a, B> {
     Nil,
-    Append(Box<Doc<'a>>, Box<Doc<'a>>),
-    Group(Box<Doc<'a>>),
-    Nest(usize, Box<Doc<'a>>),
+    Append(B, B),
+    Group(B),
+    Nest(usize, B),
     Newline,
     Text(::std::borrow::Cow<'a, str>),
 }
 
-type Cmd<'a> = (usize, Mode, &'a Doc<'a>);
+type Cmd<'a, B> = (usize, Mode, &'a Doc<'a, B>);
 
 #[inline]
-fn fitting<'a>(
-    next: Cmd<'a>,
-    bcmds: &Vec<Cmd<'a>>,
-    fcmds: &mut Vec<Cmd<'a>>,
+fn fitting<'a, B>(
+    next: Cmd<'a, B>,
+    bcmds: &Vec<Cmd<'a, B>>,
+    fcmds: &mut Vec<Cmd<'a, B>>,
     mut rem: isize,
-) -> bool {
+) -> bool
+where B: Deref<Target = Doc<'a, B>>
+{
     let mut bidx = bcmds.len();
     let mut fits = true;
     fcmds.clear(); // clear from previous calls from best
@@ -91,11 +94,13 @@ fn fitting<'a>(
 }
 
 #[inline]
-pub fn best<W: io::Write>(
-    doc: &Doc,
+pub fn best<'a, W: io::Write, B>(
+    doc: &'a Doc<'a, B>,
     width: usize,
     out: &mut W,
-) -> io::Result<()> {
+) -> io::Result<()>
+where B: Deref<Target = Doc<'a, B>> 
+{
     let mut pos = 0usize;
     let mut bcmds = vec![(0usize, Mode::Break, doc)];
     let mut fcmds = vec![];
