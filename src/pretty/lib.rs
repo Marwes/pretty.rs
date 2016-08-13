@@ -14,8 +14,6 @@ use doc::Doc::{
 use std::borrow::Cow;
 use std::ops::Deref;
 
-use typed_arena::Arena;
-
 mod doc;
 
 #[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
@@ -122,8 +120,10 @@ impl<'a> Deref for RefDoc<'a> {
     }
 }
 
+pub type Arena<'a> = typed_arena::Arena<doc::Doc<'a, RefDoc<'a>>>;
 
-impl<'a> Allocator<'a> for Arena<doc::Doc<'a, RefDoc<'a>>> {
+
+impl<'a> Allocator<'a> for Arena<'a> {
     type Doc = RefDoc<'a>;
     
     fn alloc(&'a self, doc: doc::Doc<'a, Self::Doc>) -> Self::Doc {
