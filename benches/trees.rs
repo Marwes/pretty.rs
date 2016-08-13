@@ -23,7 +23,6 @@ macro_rules! bench_trees {
     ($b: expr, $out: expr, $allocator: expr, $size: expr) => {{
         let arena = Arena::new();
         let b = $b;
-        let allocator = $allocator;
         let mut out = $out;
         let size = $size;
 
@@ -45,6 +44,8 @@ macro_rules! bench_trees {
                 ].iter().cloned());
             example = Tree::node_with_forest("aaa", aaas);
         }
+        let allocator = $allocator;
+
         let task = || {
             example.pretty(&allocator).1.render(70, &mut out).unwrap();
         };

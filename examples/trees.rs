@@ -21,7 +21,7 @@ impl<'a> Forest<'a> {
         Forest(&[])
     }
 
-    fn bracket<'b, A>(&self, allocator: &'b A) -> DocBuilder<'b, A>
+    fn bracket<'b, A>(&'b self, allocator: &'b A) -> DocBuilder<'b, A>
     where A: Allocator<'b>
     {
         if (self.0).len() == 0 {
@@ -37,7 +37,7 @@ impl<'a> Forest<'a> {
         }
     }
 
-    fn pretty<'b, A>(&self, allocator: &'b A) -> DocBuilder<'b, A>
+    fn pretty<'b, A>(&'b self, allocator: &'b A) -> DocBuilder<'b, A>
     where A: Allocator<'b>
     {
         let forest = self.0;
@@ -83,10 +83,10 @@ impl<'a> Tree<'a> {
         }
     }
 
-    pub fn pretty<'b, A>(&self, allocator: &'b A) -> DocBuilder<'b, A>
+    pub fn pretty<'b, A>(&'b self, allocator: &'b A) -> DocBuilder<'b, A>
     where A: Allocator<'b>
     {
-        allocator.text(self.node.clone())
+        allocator.text(&self.node[..])
             .append((self.forest).bracket(allocator))
             .group()
     }
