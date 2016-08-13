@@ -3,9 +3,6 @@
 //! pretty-printing API.
 extern crate typed_arena;
 
-use doc::{
-    best,
-};
 use doc::Doc::{
     Append,
     Group,
@@ -14,15 +11,12 @@ use doc::Doc::{
     Nil,
     Text,
 };
-use std::io;
 use std::borrow::Cow;
 use std::ops::Deref;
 
 use typed_arena::Arena;
 
 mod doc;
-
-pub type Doc<'a, B> = doc::Doc<'a, B>;
 
 #[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
 pub struct BoxDoc<'a>(Box<doc::Doc<'a, BoxDoc<'a>>>);
@@ -139,6 +133,8 @@ impl<'a> Allocator<'a> for Arena<doc::Doc<'a, RefDoc<'a>>> {
 
 pub struct BoxAllocator;
 
+static BOX_ALLOCATOR: BoxAllocator = BoxAllocator;
+
 impl<'a> Allocator<'a> for BoxAllocator {
     type Doc = BoxDoc<'a>;
     
@@ -146,58 +142,49 @@ impl<'a> Allocator<'a> for BoxAllocator {
         BoxDoc::new(doc)
     }
 }
-impl<'a> BoxDoc<'a> {
+
+pub type Doc<'a> = doc::Doc<'a, BoxDoc<'a>>;
+
+impl<'a> Doc<'a> {
     #[inline]
-    pub fn nil() -> BoxDoc<'a> {
-        BoxDoc::new(Nil)
+    pub fn nil() -> Doc<'a> {
+        Nil
     }
 
     #[inline]
-    pub fn append(self, that: BoxDoc<'a>) -> BoxDoc<'a> {
-        match &*self {
-            &Nil  => that,
-            _ => match &*that {
-                &Nil  => self,
-                _ => BoxDoc::new(Append(self, that)),
-            }
-        }
+    pub fn append(self, that: Doc<'a>) -> Doc<'a> {
+        DocBuilder(&BOX_ALLOCATOR, self).append(that).into()
     }
 
     #[inline]
-    pub fn as_string<T: ToString>(t: T) -> BoxDoc<'a> {
-        BoxDoc::text(t.to_string())
+    pub fn as_string<T: ToString>(t: T) -> Doc<'a> {
+        Doc::text(t.to_string())
     }
 
     #[inline]
-    pub fn concat<I>(&'a self, docs: I) -> BoxDoc<'a>
-    where I: IntoIterator<Item = BoxDoc<'a>>
+    pub fn concat<I>(&'a self, docs: I) -> Doc<'a>
+    where I: IntoIterator<Item = Doc<'a>>
     {
-        docs.into_iter().fold(BoxDoc::nil(), |a, b| a.append(b))
+        docs.into_iter().fold(Doc::nil(), |a, b| a.append(b))
     }
 
     #[inline]
-    pub fn group(self) -> BoxDoc<'a> {
-        BoxDoc::new(Group(self))
+    pub fn group(self) -> Doc<'a> {
+        DocBuilder(&BOX_ALLOCATOR, self).group().into()
     }
 
     #[inline]
-    pub fn nest(self, offset: usize) -> BoxDoc<'a> {
-        BoxDoc::new(Nest(offset, self))
+    pub fn nest(self, offset: usize) -> Doc<'a> {
+        DocBuilder(&BOX_ALLOCATOR, self).nest(offset).into()
     }
 
     #[inline]
-    pub fn newline() -> BoxDoc<'a> {
-        BoxDoc::new(Newline)
+    pub fn newline() -> Doc<'a> {
+        Newline
     }
 
     #[inline]
-    pub fn render<W: io::Write>(&self, width: usize, out: &mut W) -> io::Result<()> {
-        let &BoxDoc(ref doc) = self;
-        best(doc, width, out).and_then(|()| out.write_all(b"\n"))
-    }
-
-    #[inline]
-    pub fn text<T: Into<Cow<'a, str>>>(data: T) -> BoxDoc<'a> {
-        BoxDoc::new(Text(data.into()))
+    pub fn text<T: Into<Cow<'a, str>>>(data: T) -> Doc<'a> {
+        Text(data.into())
     }
 }
