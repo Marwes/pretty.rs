@@ -12,12 +12,19 @@ use doc::Doc::{
     Text,
 };
 use std::borrow::Cow;
+use std::fmt;
 use std::ops::Deref;
 
 mod doc;
 
-#[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
+#[derive(Clone, Eq, Ord, PartialEq, PartialOrd)]
 pub struct BoxDoc<'a>(Box<doc::Doc<'a, BoxDoc<'a>>>);
+
+impl<'a> fmt::Debug for BoxDoc<'a> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        self.0.fmt(f)
+    }
+}
 
 impl<'a> BoxDoc<'a> {
     fn new(doc: doc::Doc<'a, BoxDoc<'a>>) -> BoxDoc<'a> {
@@ -109,8 +116,14 @@ impl<'a, 's, A: ?Sized> DocBuilder<'a, A> where A: Allocator<'a> {
     }
 }
 
-#[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
+#[derive(Clone, Eq, Ord, PartialEq, PartialOrd)]
 pub struct RefDoc<'a>(&'a doc::Doc<'a, RefDoc<'a>>);
+
+impl<'a> fmt::Debug for RefDoc<'a> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        self.0.fmt(f)
+    }
+}
 
 impl<'a> Deref for RefDoc<'a> {
     type Target = doc::Doc<'a, RefDoc<'a>>;
