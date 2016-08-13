@@ -127,13 +127,20 @@ where B: Deref<Target = Doc<'a, B>>
                 bcmds.push((ind + off, mode, doc));
             },
             &Newline => {
-                const SPACES: [u8; 100] = [b' '; 100];
-                try!(out.write_all(b"\n"));
-                let mut inserted = 0;
-                while inserted < ind {
-                    let insert = cmp::min(100, ind - inserted);
-                    inserted += insert;
-                    try!(out.write_all(&SPACES[..insert]));
+                match mode {
+                    Mode::Flat => {
+                        try!(out.write_all(b" "));
+                    },
+                    Mode::Break => {
+                        const SPACES: [u8; 100] = [b' '; 100];
+                        try!(out.write_all(b"\n"));
+                        let mut inserted = 0;
+                        while inserted < ind {
+                            let insert = cmp::min(100, ind - inserted);
+                            inserted += insert;
+                            try!(out.write_all(&SPACES[..insert]));
+                        }
+                    },
                 }
                 pos = ind;
             },
