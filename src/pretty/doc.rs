@@ -55,18 +55,14 @@ fn fitting<'a, B>(
 where B: Deref<Target = Doc<'a, B>>
 {
     let mut bidx = bcmds.len();
-    let mut fits = true;
     fcmds.clear(); // clear from previous calls from best
     fcmds.push(next);
-    loop {
-        if rem < 0 {
-            fits = false;
-            break;
-        }
+    while rem >= 0 {
         match fcmds.pop() {
             None => {
                 if bidx == 0 {
-                    break;
+                    // All commands have been processed
+                    return true;
                 } else {
                     fcmds.push(bcmds[ bidx - 1 ]);
                     bidx -= 1;
@@ -86,7 +82,14 @@ where B: Deref<Target = Doc<'a, B>>
                     fcmds.push((ind + off, mode, doc));
                 },
                 &Newline => {
-                    fits = true;
+                    match mode {
+                        Mode::Flat => {
+                            rem -= 1;
+                        },
+                        Mode::Break => {
+                            return true;
+                        },
+                    }
                 },
                 &Text(ref str) => {
                     rem -= str.len() as isize;
@@ -94,7 +97,7 @@ where B: Deref<Target = Doc<'a, B>>
             }
         }
     }
-    fits
+    false
 }
 
 #[inline]
