@@ -1,4 +1,4 @@
-use std::iter;
+use std::cmp;
 use std::io;
 use std::ops::Deref;
 
@@ -131,8 +131,13 @@ where B: Deref<Target = Doc<'a, B>>
                     bcmds.push((ind + off, mode, doc));
                 },
                 &Newline => {
-                    for b in iter::once(b'\n').chain(iter::repeat(b' ').take(ind)) {
-                        try!(out.write_all(&[b]));
+                    const SPACES: [u8; 100] = [b' '; 100];
+                    try!(out.write_all(b"\n"));
+                    let mut inserted = 0;
+                    while inserted < ind {
+                        let insert = cmp::min(100, ind - inserted);
+                        inserted += insert;
+                        try!(out.write_all(&SPACES[..insert]));
                     }
                     pos = ind;
                 },
