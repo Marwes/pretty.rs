@@ -77,8 +77,10 @@ pub trait Allocator<'a> {
     }
 
     #[inline]
-    fn concat(&'a self, docs: &[doc::Doc<'a, Self::Doc>]) -> DocBuilder<'a, Self> {
-        docs.iter().cloned().fold(self.nil(), |a, b| a.append(b))
+    fn concat<I>(&'a self, docs: I) -> DocBuilder<'a, Self>
+    where I: IntoIterator<Item = doc::Doc<'a, Self::Doc>>
+    {
+        docs.into_iter().fold(self.nil(), |a, b| a.append(b))
     }
 }
 
@@ -167,8 +169,10 @@ impl<'a> BoxDoc<'a> {
     }
 
     #[inline]
-    pub fn concat(docs: &[BoxDoc<'a>]) -> BoxDoc<'a> {
-        docs.iter().fold(BoxDoc::nil(), |a, b| a.append(b.clone()))
+    pub fn concat<I>(&'a self, docs: I) -> BoxDoc<'a>
+    where I: IntoIterator<Item = BoxDoc<'a>>
+    {
+        docs.into_iter().fold(BoxDoc::nil(), |a, b| a.append(b))
     }
 
     #[inline]
