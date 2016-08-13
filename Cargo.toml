@@ -24,3 +24,6 @@ path = "examples/trees.rs"
 
 [dependencies]
 typed-arena = "1.2.0"
+
+[dev-dependencies]
+tempfile = "2.1.4"
