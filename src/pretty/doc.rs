@@ -39,6 +39,15 @@ pub enum Doc<'a, B> {
     Text(::std::borrow::Cow<'a, str>),
 }
 
+impl<'a, B> Doc<'a, B> {
+    #[inline]
+    pub fn render<'b, W: io::Write>(&'b self, width: usize, out: &mut W) -> io::Result<()>
+    where B: Deref<Target = Doc<'b, B>>
+    {
+        best(self, width, out).and_then(|()| out.write_all(b"\n"))
+    }
+}
+
 type Cmd<'a, B> = (usize, Mode, &'a Doc<'a, B>);
 
 #[inline]

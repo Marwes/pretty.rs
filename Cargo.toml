@@ -20,3 +20,7 @@ path = "src/pretty/lib.rs"
 doc  = false
 name = "trees"
 path = "examples/trees.rs"
+
+
+[dependencies]
+typed-arena = "1.2.0"
