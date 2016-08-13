@@ -1,3 +1,4 @@
+use std::borrow::Cow;
 use std::cmp;
 use std::io;
 use std::ops::Deref;
@@ -24,7 +25,13 @@ pub enum Doc<'a, B> {
     Group(B),
     Nest(usize, B),
     Newline,
-    Text(::std::borrow::Cow<'a, str>),
+    Text(Cow<'a, str>),
+}
+
+impl<'a, B, S> From<S> for Doc<'a, B> where S: Into<Cow<'a, str>> {
+    fn from(s: S) -> Doc<'a, B> {
+        Doc::Text(s.into())
+    }
 }
 
 impl<'a, B> Doc<'a, B> {
