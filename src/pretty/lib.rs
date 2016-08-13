@@ -83,19 +83,12 @@ pub trait Allocator<'a> {
 }
 
 
-pub trait DocAllocator<'a> : Sized + 'a {
-    type Allocator: ?Sized + Allocator<'a>;
-    type Doc: Deref<Target = doc::Doc<'a, Self::Doc>> + Clone;
-
+impl<'a, 's, A: ?Sized> DocBuilder<'a, A> where A: Allocator<'a> {
     #[inline]
-    fn split(self) -> DocBuilder<'a, Self::Allocator>;
-
-    #[inline]
-    fn append<B>(self, that: B) -> DocBuilder<'a, Self::Allocator>
-    where B: Into<doc::Doc<'a, Self::Doc>>,
-          Self::Allocator: Allocator<'a, Doc = Self::Doc>,
+    pub fn append<B>(self, that: B) -> DocBuilder<'a, A>
+    where B: Into<doc::Doc<'a, A::Doc>>,
     {
-        let DocBuilder(allocator, this) = self.split();
+        let DocBuilder(allocator, this) = self;
         let that = that.into();
         let doc = match this {
             Nil  => that,
@@ -108,31 +101,17 @@ pub trait DocAllocator<'a> : Sized + 'a {
     }
 
     #[inline]
-    fn group(self) -> DocBuilder<'a, Self::Allocator>
-    where Self::Allocator: Allocator<'a, Doc = Self::Doc>,
+    pub fn group(self) -> DocBuilder<'a, A>
     {
-        let DocBuilder(allocator, this) = self.split();
+        let DocBuilder(allocator, this) = self;
         DocBuilder(allocator, Group(allocator.alloc(this)))
     }
 
     #[inline]
-    fn nest(self, offset: usize) -> DocBuilder<'a, Self::Allocator>
-    where Self::Allocator: Allocator<'a, Doc = Self::Doc>,
+    pub fn nest(self, offset: usize) -> DocBuilder<'a, A>
     {
-        let DocBuilder(allocator, this) = self.split();
+        let DocBuilder(allocator, this) = self;
         DocBuilder(allocator, Nest(offset, allocator.alloc(this)))
-    }
-}
-
-impl<'a, A: ?Sized> DocAllocator<'a> for DocBuilder<'a, A>
-where A: Allocator<'a>
-{
-    type Allocator = A;
-    type Doc = A::Doc;
-
-    #[inline]
-    fn split(self) -> DocBuilder<'a, Self::Allocator> {
-        self
     }
 }
 

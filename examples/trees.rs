@@ -3,7 +3,6 @@ extern crate pretty;
 use pretty::{
     BoxAllocator,
     Allocator,
-    DocAllocator,
     DocBuilder,
 };
 use std::io;
