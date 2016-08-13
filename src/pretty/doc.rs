@@ -1,3 +1,4 @@
+use std::iter;
 use std::io;
 use std::ops::Deref;
 
@@ -9,19 +10,6 @@ pub use self::Doc::{
     Newline,
     Text,
 };
-
-#[inline]
-fn spaces(n: usize) -> String {
-    use std::iter;
-    iter::repeat(' ').take(n).collect()
-}
-
-#[inline]
-fn spaces_then_newline(n: usize) -> String {
-    let mut s = String::from("\n");
-    s.push_str(&spaces(n));
-    s
-}
 
 #[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
 enum Mode {
@@ -143,7 +131,9 @@ where B: Deref<Target = Doc<'a, B>>
                     bcmds.push((ind + off, mode, doc));
                 },
                 &Newline => {
-                    try!(out.write_all(spaces_then_newline(ind).as_bytes()));
+                    for b in iter::once(b'\n').chain(iter::repeat(b' ').take(ind)) {
+                        try!(out.write_all(&[b]));
+                    }
                     pos = ind;
                 },
                 &Text(ref s) => {
