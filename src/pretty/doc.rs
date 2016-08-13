@@ -36,7 +36,7 @@ impl<'a, B, S> From<S> for Doc<'a, B> where S: Into<Cow<'a, str>> {
 
 impl<'a, B> Doc<'a, B> {
     #[inline]
-    pub fn render<'b, W: io::Write>(&'b self, width: usize, out: &mut W) -> io::Result<()>
+    pub fn render<'b, W: ?Sized + io::Write>(&'b self, width: usize, out: &mut W) -> io::Result<()>
     where B: Deref<Target = Doc<'b, B>>
     {
         best(self, width, out).and_then(|()| out.write_all(b"\n"))
@@ -101,7 +101,7 @@ where B: Deref<Target = Doc<'a, B>>
 }
 
 #[inline]
-pub fn best<'a, W: io::Write, B>(
+pub fn best<'a, W: ?Sized + io::Write, B>(
     doc: &'a Doc<'a, B>,
     width: usize,
     out: &mut W,
