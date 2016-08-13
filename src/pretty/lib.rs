@@ -27,6 +27,12 @@ pub type Doc<'a, B> = doc::Doc<'a, B>;
 #[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
 pub struct BoxDoc<'a>(Box<doc::Doc<'a, BoxDoc<'a>>>);
 
+impl<'a> BoxDoc<'a> {
+    fn new(doc: doc::Doc<'a, BoxDoc<'a>>) -> BoxDoc<'a> {
+        BoxDoc(Box::new(doc))
+    }
+}
+
 impl<'a> Deref for BoxDoc<'a> {
     type Target = doc::Doc<'a, BoxDoc<'a>>;
     
@@ -156,14 +162,13 @@ impl<'a> Allocator<'a> for BoxAllocator {
     type Doc = BoxDoc<'a>;
     
     fn alloc(&'a self, doc: doc::Doc<'a, Self::Doc>) -> Self::Doc {
-        BoxDoc(Box::new(doc))
+        BoxDoc::new(doc)
     }
 }
-
 impl<'a> BoxDoc<'a> {
     #[inline]
     pub fn nil() -> BoxDoc<'a> {
-        BoxDoc(Box::new(Nil))
+        BoxDoc::new(Nil)
     }
 
     #[inline]
@@ -172,7 +177,7 @@ impl<'a> BoxDoc<'a> {
             &Nil  => that,
             _ => match &*that {
                 &Nil  => self,
-                _ => BoxDoc(Box::new(Append(self, that))),
+                _ => BoxDoc::new(Append(self, that)),
             }
         }
     }
@@ -189,17 +194,17 @@ impl<'a> BoxDoc<'a> {
 
     #[inline]
     pub fn group(self) -> BoxDoc<'a> {
-        BoxDoc(Box::new(Group(self)))
+        BoxDoc::new(Group(self))
     }
 
     #[inline]
     pub fn nest(self, offset: usize) -> BoxDoc<'a> {
-        BoxDoc(Box::new(Nest(offset, self)))
+        BoxDoc::new(Nest(offset, self))
     }
 
     #[inline]
     pub fn newline() -> BoxDoc<'a> {
-        BoxDoc(Box::new(Newline))
+        BoxDoc::new(Newline)
     }
 
     #[inline]
@@ -210,6 +215,6 @@ impl<'a> BoxDoc<'a> {
 
     #[inline]
     pub fn text<T: Into<Cow<'a, str>>>(data: T) -> BoxDoc<'a> {
-        BoxDoc(Box::new(Text(data.into())))
+        BoxDoc::new(Text(data.into()))
     }
 }
