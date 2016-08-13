@@ -101,51 +101,46 @@ where B: Deref<Target = Doc<'a, B>>
     let mut pos = 0usize;
     let mut bcmds = vec![(0usize, Mode::Break, doc)];
     let mut fcmds = vec![];
-    loop {
-        match bcmds.pop() {
-            None => {
-                break;
+    while let Some((ind, mode, doc)) = bcmds.pop() {
+        match doc {
+            &Nil => {
             },
-            Some((ind, mode, doc)) => match doc {
-                &Nil => {
+            &Append(ref ldoc, ref rdoc) => {
+                bcmds.push((ind, mode, rdoc));
+                bcmds.push((ind, mode, ldoc));
+            },
+            &Group(ref doc) => match mode {
+                Mode::Flat => {
+                    bcmds.push((ind, Mode::Flat, doc));
                 },
-                &Append(ref ldoc, ref rdoc) => {
-                    bcmds.push((ind, mode, rdoc));
-                    bcmds.push((ind, mode, ldoc));
-                },
-                &Group(ref doc) => match mode {
-                    Mode::Flat => {
-                        bcmds.push((ind, Mode::Flat, doc));
-                    },
-                    Mode::Break => {
-                        let next = (ind, Mode::Flat, &**doc);
-                        let rem = width as isize - pos as isize;
-                        if fitting(next, &bcmds, &mut fcmds, rem) {
-                            bcmds.push(next);
-                        } else {
-                            bcmds.push((ind, Mode::Break, doc));
-                        }
+                Mode::Break => {
+                    let next = (ind, Mode::Flat, &**doc);
+                    let rem = width as isize - pos as isize;
+                    if fitting(next, &bcmds, &mut fcmds, rem) {
+                        bcmds.push(next);
+                    } else {
+                        bcmds.push((ind, Mode::Break, doc));
                     }
-                },
-                &Nest(off, ref doc) => {
-                    bcmds.push((ind + off, mode, doc));
-                },
-                &Newline => {
-                    const SPACES: [u8; 100] = [b' '; 100];
-                    try!(out.write_all(b"\n"));
-                    let mut inserted = 0;
-                    while inserted < ind {
-                        let insert = cmp::min(100, ind - inserted);
-                        inserted += insert;
-                        try!(out.write_all(&SPACES[..insert]));
-                    }
-                    pos = ind;
-                },
-                &Text(ref s) => {
-                    try!(out.write_all(&s.as_bytes()));
-                    pos += s.len();
-                },
-            }
+                }
+            },
+            &Nest(off, ref doc) => {
+                bcmds.push((ind + off, mode, doc));
+            },
+            &Newline => {
+                const SPACES: [u8; 100] = [b' '; 100];
+                try!(out.write_all(b"\n"));
+                let mut inserted = 0;
+                while inserted < ind {
+                    let insert = cmp::min(100, ind - inserted);
+                    inserted += insert;
+                    try!(out.write_all(&SPACES[..insert]));
+                }
+                pos = ind;
+            },
+            &Text(ref s) => {
+                try!(out.write_all(&s.as_bytes()));
+                pos += s.len();
+            },
         }
     }
     Ok(())
