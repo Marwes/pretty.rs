@@ -18,6 +18,11 @@ enum Mode {
     Flat,
 }
 
+/// The concrete document type. This type is not meant to be used directly. Instead use the static
+/// functions on `Doc` or the methods on an `Allocator`.
+///
+/// The `B` paramater is used to abstract over pointers to `Doc`. See `RefDoc` and `BoxDoc` for how
+/// it is used
 #[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
 pub enum Doc<'a, B> {
     Nil,
@@ -35,6 +40,8 @@ impl<'a, B, S> From<S> for Doc<'a, B> where S: Into<Cow<'a, str>> {
 }
 
 impl<'a, B> Doc<'a, B> {
+
+    /// Writes a rendered document.
     #[inline]
     pub fn render<'b, W: ?Sized + io::Write>(&'b self, width: usize, out: &mut W) -> io::Result<()>
     where B: Deref<Target = Doc<'b, B>>

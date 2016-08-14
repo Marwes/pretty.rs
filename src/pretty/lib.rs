@@ -40,6 +40,8 @@ impl<'a> Deref for BoxDoc<'a> {
     }
 }
 
+/// The `DocBuilder` type allows for convenient appending of documents even for arena allocated
+/// documents by storing the arena inline.
 pub struct DocBuilder<'a, A: ?Sized>(pub &'a A, pub doc::Doc<'a, A::Doc>)
     where A: Allocator<'a> + 'a;
 
@@ -51,6 +53,7 @@ impl <'a, A: ?Sized> Into<doc::Doc<'a, A::Doc>> for DocBuilder<'a, A>
     }
 }
 
+/// The `Allocator` trait abstracts over a type which can allocate (pointers to) `Doc`.
 pub trait Allocator<'a> {
     type Doc: Deref<Target = doc::Doc<'a, Self::Doc>> + Clone;
     fn alloc(&'a self, doc::Doc<'a, Self::Doc>) -> Self::Doc;
@@ -116,6 +119,7 @@ impl<'a, 's, A: ?Sized> DocBuilder<'a, A> where A: Allocator<'a> {
     }
 }
 
+/// Newtype wrapper for `&doc::Doc`
 #[derive(Clone, Eq, Ord, PartialEq, PartialOrd)]
 pub struct RefDoc<'a>(&'a doc::Doc<'a, RefDoc<'a>>);
 
@@ -133,8 +137,8 @@ impl<'a> Deref for RefDoc<'a> {
     }
 }
 
+/// An arena which can be used to allocate `Doc` values.
 pub type Arena<'a> = typed_arena::Arena<doc::Doc<'a, RefDoc<'a>>>;
-
 
 impl<'a> Allocator<'a> for Arena<'a> {
     type Doc = RefDoc<'a>;
@@ -156,48 +160,48 @@ impl<'a> Allocator<'a> for BoxAllocator {
     }
 }
 
-pub type Doc<'a> = doc::Doc<'a, BoxDoc<'a>>;
+pub use doc::Doc;
 
-impl<'a> Doc<'a> {
+impl<'a> Doc<'a, BoxDoc<'a>> {
     #[inline]
-    pub fn nil() -> Doc<'a> {
+    pub fn nil() -> Doc<'a, BoxDoc<'a>> {
         Nil
     }
 
     #[inline]
-    pub fn append(self, that: Doc<'a>) -> Doc<'a> {
+    pub fn append(self, that: Doc<'a, BoxDoc<'a>>) -> Doc<'a, BoxDoc<'a>> {
         DocBuilder(&BOX_ALLOCATOR, self).append(that).into()
     }
 
     #[inline]
-    pub fn as_string<T: ToString>(t: T) -> Doc<'a> {
+    pub fn as_string<T: ToString>(t: T) -> Doc<'a, BoxDoc<'a>> {
         Doc::text(t.to_string())
     }
 
     #[inline]
-    pub fn concat<I>(&'a self, docs: I) -> Doc<'a>
-    where I: IntoIterator<Item = Doc<'a>>
+    pub fn concat<I>(&'a self, docs: I) -> Doc<'a, BoxDoc<'a>>
+    where I: IntoIterator<Item = Doc<'a, BoxDoc<'a>>>
     {
         docs.into_iter().fold(Doc::nil(), |a, b| a.append(b))
     }
 
     #[inline]
-    pub fn group(self) -> Doc<'a> {
+    pub fn group(self) -> Doc<'a, BoxDoc<'a>> {
         DocBuilder(&BOX_ALLOCATOR, self).group().into()
     }
 
     #[inline]
-    pub fn nest(self, offset: usize) -> Doc<'a> {
+    pub fn nest(self, offset: usize) -> Doc<'a, BoxDoc<'a>> {
         DocBuilder(&BOX_ALLOCATOR, self).nest(offset).into()
     }
 
     #[inline]
-    pub fn newline() -> Doc<'a> {
+    pub fn newline() -> Doc<'a, BoxDoc<'a>> {
         Newline
     }
 
     #[inline]
-    pub fn text<T: Into<Cow<'a, str>>>(data: T) -> Doc<'a> {
+    pub fn text<T: Into<Cow<'a, str>>>(data: T) -> Doc<'a, BoxDoc<'a>> {
         Text(data.into())
     }
 }
