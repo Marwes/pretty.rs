@@ -43,7 +43,7 @@ impl<'a> Deref for BoxDoc<'a> {
 pub struct DocBuilder<'a, A: ?Sized>(pub &'a A, pub doc::Doc<'a, A::Doc>)
     where A: Allocator<'a> + 'a;
 
-impl <'a, A> Into<doc::Doc<'a, A::Doc>> for DocBuilder<'a, A>
+impl <'a, A: ?Sized> Into<doc::Doc<'a, A::Doc>> for DocBuilder<'a, A>
     where A: Allocator<'a>
 {
     fn into(self) -> doc::Doc<'a, A::Doc> {
