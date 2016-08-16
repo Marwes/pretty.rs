@@ -1,7 +1,9 @@
 extern crate pretty;
 
 use pretty::{
-    Doc
+    BoxAllocator,
+    DocAllocator,
+    DocBuilder,
 };
 use std::io;
 use std::str;
@@ -18,35 +20,39 @@ impl<'a> Forest<'a> {
         Forest(&[])
     }
 
-    fn bracket(&self) -> Doc {
+    fn bracket<'b, A>(&'b self, allocator: &'b A) -> DocBuilder<'b, A>
+    where A: DocAllocator<'b>
+    {
         if (self.0).len() == 0 {
-            Doc::nil()
+            allocator.nil()
         } else {
-            Doc::text("[")
+            allocator.text("[")
                 .append(
-                    Doc::newline()
-                        .append(self.pretty())
+                    allocator.newline()
+                        .append(self.pretty(allocator))
                         .nest(2))
-                .append(Doc::newline())
-                .append(Doc::text("]"))
+                .append(allocator.newline())
+                .append(allocator.text("]"))
         }
     }
 
-    fn pretty(&self) -> Doc {
+    fn pretty<'b, A>(&'b self, allocator: &'b A) -> DocBuilder<'b, A>
+    where A: DocAllocator<'b>
+    {
         let forest = self.0;
-        let mut doc = Doc::nil();
+        let mut doc = allocator.nil();
         let mut i = 0;
         let k = forest.len() - 1;
         loop {
             if i < k {
                 doc = doc
-                    .append(forest[i].pretty()
-                        .append(Doc::text(","))
-                        .append(Doc::newline()));
+                    .append(forest[i].pretty(allocator)
+                        .append(allocator.text(","))
+                        .append(allocator.newline()));
             }
             else if i == k {
                 doc = doc
-                    .append(forest[i].pretty());
+                    .append(forest[i].pretty(allocator));
                 break
             }
             i += 1;
@@ -76,15 +82,18 @@ impl<'a> Tree<'a> {
         }
     }
 
-    pub fn pretty(&self) -> Doc {
-        Doc::text(self.node.clone())
-            .append((self.forest).bracket())
+    pub fn pretty<'b, A>(&'b self, allocator: &'b A) -> DocBuilder<'b, A>
+    where A: DocAllocator<'b>
+    {
+        allocator.text(&self.node[..])
+            .append((self.forest).bracket(allocator))
             .group()
     }
 }
 
 #[allow(dead_code)]
 pub fn main() {
+    let allocator = BoxAllocator;
     let bbbbbbs = [
         Tree::node("ccc"),
         Tree::node("dd"),
@@ -108,14 +117,16 @@ pub fn main() {
         print!("\nwriting to stdout directly:\n");
         let mut out = io::stdout();
         example
-            .pretty()
+            .pretty(&allocator)
+            .1
             .render(70, &mut out)
     // try writing to memory
     }.and_then(|()| {
         print!("\nwriting to string then printing:\n");
         let mut mem = Vec::new();
         example
-            .pretty()
+            .pretty(&allocator)
+            .1
             .render(70, &mut mem)
             // print to console from memory
             .map(|()| {

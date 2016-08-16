@@ -1,4 +1,7 @@
+use std::borrow::Cow;
+use std::cmp;
 use std::io;
+use std::ops::Deref;
 
 pub use self::Doc::{
     Nil,
@@ -9,57 +12,64 @@ pub use self::Doc::{
     Text,
 };
 
-#[inline]
-fn spaces(n: usize) -> String {
-    use std::iter;
-    iter::repeat(' ').take(n).collect()
-}
-
-#[inline]
-fn spaces_then_newline(n: usize) -> String {
-    let mut s = String::from("\n");
-    s.push_str(&spaces(n));
-    s
-}
-
 #[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
 enum Mode {
     Break,
     Flat,
 }
 
+/// The concrete document type. This type is not meant to be used directly. Instead use the static
+/// functions on `Doc` or the methods on an `DocAllocator`.
+///
+/// The `B` parameter is used to abstract over pointers to `Doc`. See `RefDoc` and `BoxDoc` for how
+/// it is used
 #[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
-pub enum Doc<'a> {
+pub enum Doc<'a, B> {
     Nil,
-    Append(Box<Doc<'a>>, Box<Doc<'a>>),
-    Group(Box<Doc<'a>>),
-    Nest(usize, Box<Doc<'a>>),
+    Append(B, B),
+    Group(B),
+    Nest(usize, B),
     Newline,
-    Text(::std::borrow::Cow<'a, str>),
+    Text(Cow<'a, str>),
 }
 
-type Cmd<'a> = (usize, Mode, &'a Doc<'a>);
+impl<'a, B, S> From<S> for Doc<'a, B> where S: Into<Cow<'a, str>> {
+    fn from(s: S) -> Doc<'a, B> {
+        Doc::Text(s.into())
+    }
+}
+
+impl<'a, B> Doc<'a, B> {
+
+    /// Writes a rendered document.
+    #[inline]
+    pub fn render<'b, W: ?Sized + io::Write>(&'b self, width: usize, out: &mut W) -> io::Result<()>
+    where B: Deref<Target = Doc<'b, B>>
+    {
+        best(self, width, out).and_then(|()| out.write_all(b"\n"))
+    }
+}
+
+type Cmd<'a, B> = (usize, Mode, &'a Doc<'a, B>);
 
 #[inline]
-fn fitting<'a>(
-    next: Cmd<'a>,
-    bcmds: &Vec<Cmd<'a>>,
-    fcmds: &mut Vec<Cmd<'a>>,
+fn fitting<'a, B>(
+    next: Cmd<'a, B>,
+    bcmds: &Vec<Cmd<'a, B>>,
+    fcmds: &mut Vec<Cmd<'a, B>>,
     mut rem: isize,
-) -> bool {
+) -> bool
+where B: Deref<Target = Doc<'a, B>>
+{
     let mut bidx = bcmds.len();
-    let mut fits = true;
     fcmds.clear(); // clear from previous calls from best
     fcmds.push(next);
-    loop {
-        if rem < 0 {
-            fits = false;
-            break;
-        }
+    while rem >= 0 {
         match fcmds.pop() {
             None => {
                 if bidx == 0 {
-                    break;
+                    // All commands have been processed
+                    return true;
                 } else {
                     fcmds.push(bcmds[ bidx - 1 ]);
                     bidx -= 1;
@@ -79,7 +89,14 @@ fn fitting<'a>(
                     fcmds.push((ind + off, mode, doc));
                 },
                 &Newline => {
-                    fits = true;
+                    match mode {
+                        Mode::Flat => {
+                            rem -= 1;
+                        },
+                        Mode::Break => {
+                            return true;
+                        },
+                    }
                 },
                 &Text(ref str) => {
                     rem -= str.len() as isize;
@@ -87,56 +104,66 @@ fn fitting<'a>(
             }
         }
     }
-    fits
+    false
 }
 
 #[inline]
-pub fn best<W: io::Write>(
-    doc: &Doc,
+pub fn best<'a, W: ?Sized + io::Write, B>(
+    doc: &'a Doc<'a, B>,
     width: usize,
     out: &mut W,
-) -> io::Result<()> {
+) -> io::Result<()>
+where B: Deref<Target = Doc<'a, B>> 
+{
     let mut pos = 0usize;
     let mut bcmds = vec![(0usize, Mode::Break, doc)];
     let mut fcmds = vec![];
-    loop {
-        match bcmds.pop() {
-            None => {
-                break;
+    while let Some((ind, mode, doc)) = bcmds.pop() {
+        match doc {
+            &Nil => {
             },
-            Some((ind, mode, doc)) => match doc {
-                &Nil => {
+            &Append(ref ldoc, ref rdoc) => {
+                bcmds.push((ind, mode, rdoc));
+                bcmds.push((ind, mode, ldoc));
+            },
+            &Group(ref doc) => match mode {
+                Mode::Flat => {
+                    bcmds.push((ind, Mode::Flat, doc));
                 },
-                &Append(ref ldoc, ref rdoc) => {
-                    bcmds.push((ind, mode, rdoc));
-                    bcmds.push((ind, mode, ldoc));
-                },
-                &Group(ref doc) => match mode {
+                Mode::Break => {
+                    let next = (ind, Mode::Flat, &**doc);
+                    let rem = width as isize - pos as isize;
+                    if fitting(next, &bcmds, &mut fcmds, rem) {
+                        bcmds.push(next);
+                    } else {
+                        bcmds.push((ind, Mode::Break, doc));
+                    }
+                }
+            },
+            &Nest(off, ref doc) => {
+                bcmds.push((ind + off, mode, doc));
+            },
+            &Newline => {
+                match mode {
                     Mode::Flat => {
-                        bcmds.push((ind, Mode::Flat, doc));
+                        try!(out.write_all(b" "));
                     },
                     Mode::Break => {
-                        let next = (ind, Mode::Flat, &**doc);
-                        let rem = width as isize - pos as isize;
-                        if fitting(next, &bcmds, &mut fcmds, rem) {
-                            bcmds.push(next);
-                        } else {
-                            bcmds.push((ind, Mode::Break, doc));
+                        const SPACES: [u8; 100] = [b' '; 100];
+                        try!(out.write_all(b"\n"));
+                        let mut inserted = 0;
+                        while inserted < ind {
+                            let insert = cmp::min(100, ind - inserted);
+                            inserted += try!(out.write(&SPACES[..insert]));
                         }
-                    }
-                },
-                &Nest(off, ref doc) => {
-                    bcmds.push((ind + off, mode, doc));
-                },
-                &Newline => {
-                    try!(out.write_all(spaces_then_newline(ind).as_bytes()));
-                    pos = ind;
-                },
-                &Text(ref s) => {
-                    try!(out.write_all(&s.as_bytes()));
-                    pos += s.len();
-                },
-            }
+                    },
+                }
+                pos = ind;
+            },
+            &Text(ref s) => {
+                try!(out.write_all(&s.as_bytes()));
+                pos += s.len();
+            },
         }
     }
     Ok(())
