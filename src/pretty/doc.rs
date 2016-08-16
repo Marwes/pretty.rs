@@ -21,7 +21,7 @@ enum Mode {
 /// The concrete document type. This type is not meant to be used directly. Instead use the static
 /// functions on `Doc` or the methods on an `Allocator`.
 ///
-/// The `B` paramater is used to abstract over pointers to `Doc`. See `RefDoc` and `BoxDoc` for how
+/// The `B` parameter is used to abstract over pointers to `Doc`. See `RefDoc` and `BoxDoc` for how
 /// it is used
 #[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
 pub enum Doc<'a, B> {
@@ -154,8 +154,7 @@ where B: Deref<Target = Doc<'a, B>>
                         let mut inserted = 0;
                         while inserted < ind {
                             let insert = cmp::min(100, ind - inserted);
-                            inserted += insert;
-                            try!(out.write_all(&SPACES[..insert]));
+                            inserted += try!(out.write(&SPACES[..insert]));
                         }
                     },
                 }
