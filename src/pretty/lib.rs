@@ -164,20 +164,32 @@ impl<'a> DocAllocator<'a> for BoxAllocator {
 
 pub use doc::Doc;
 
-impl<'a> Doc<'a, BoxDoc<'a>> {
+impl<'a, B> Doc<'a, B> {
     #[inline]
-    pub fn nil() -> Doc<'a, BoxDoc<'a>> {
+    pub fn nil() -> Doc<'a, B> {
         Nil
     }
 
     #[inline]
-    pub fn append(self, that: Doc<'a, BoxDoc<'a>>) -> Doc<'a, BoxDoc<'a>> {
-        DocBuilder(&BOX_ALLOCATOR, self).append(that).into()
+    pub fn as_string<T: ToString>(t: T) -> Doc<'a, B> {
+        Doc::text(t.to_string())
     }
 
     #[inline]
-    pub fn as_string<T: ToString>(t: T) -> Doc<'a, BoxDoc<'a>> {
-        Doc::text(t.to_string())
+    pub fn newline() -> Doc<'a, B> {
+        Newline
+    }
+
+    #[inline]
+    pub fn text<T: Into<Cow<'a, str>>>(data: T) -> Doc<'a, B> {
+        Text(data.into())
+    }
+}
+
+impl<'a> Doc<'a, BoxDoc<'a>> {
+    #[inline]
+    pub fn append(self, that: Doc<'a, BoxDoc<'a>>) -> Doc<'a, BoxDoc<'a>> {
+        DocBuilder(&BOX_ALLOCATOR, self).append(that).into()
     }
 
     #[inline]
@@ -195,15 +207,5 @@ impl<'a> Doc<'a, BoxDoc<'a>> {
     #[inline]
     pub fn nest(self, offset: usize) -> Doc<'a, BoxDoc<'a>> {
         DocBuilder(&BOX_ALLOCATOR, self).nest(offset).into()
-    }
-
-    #[inline]
-    pub fn newline() -> Doc<'a, BoxDoc<'a>> {
-        Newline
-    }
-
-    #[inline]
-    pub fn text<T: Into<Cow<'a, str>>>(data: T) -> Doc<'a, BoxDoc<'a>> {
-        Text(data.into())
     }
 }
