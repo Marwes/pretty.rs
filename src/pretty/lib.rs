@@ -1,6 +1,8 @@
 //! This crate defines a
 //! [Wadler-style](http://homepages.inf.ed.ac.uk/wadler/papers/prettier/prettier.pdf)
 //! pretty-printing API.
+//!
+//! See `Doc` and
 extern crate typed_arena;
 
 use doc::Doc::{
@@ -43,18 +45,18 @@ impl<'a> Deref for BoxDoc<'a> {
 /// The `DocBuilder` type allows for convenient appending of documents even for arena allocated
 /// documents by storing the arena inline.
 pub struct DocBuilder<'a, A: ?Sized>(pub &'a A, pub doc::Doc<'a, A::Doc>)
-    where A: Allocator<'a> + 'a;
+    where A: DocAllocator<'a> + 'a;
 
 impl <'a, A: ?Sized> Into<doc::Doc<'a, A::Doc>> for DocBuilder<'a, A>
-    where A: Allocator<'a>
+    where A: DocAllocator<'a>
 {
     fn into(self) -> doc::Doc<'a, A::Doc> {
         self.1
     }
 }
 
-/// The `Allocator` trait abstracts over a type which can allocate (pointers to) `Doc`.
-pub trait Allocator<'a> {
+/// The `DocAllocator` trait abstracts over a type which can allocate (pointers to) `Doc`.
+pub trait DocAllocator<'a> {
     type Doc: Deref<Target = doc::Doc<'a, Self::Doc>> + Clone;
     fn alloc(&'a self, doc::Doc<'a, Self::Doc>) -> Self::Doc;
 
@@ -87,7 +89,7 @@ pub trait Allocator<'a> {
 }
 
 
-impl<'a, 's, A: ?Sized> DocBuilder<'a, A> where A: Allocator<'a> {
+impl<'a, 's, A: ?Sized> DocBuilder<'a, A> where A: DocAllocator<'a> {
     #[inline]
     pub fn append<B>(self, that: B) -> DocBuilder<'a, A>
     where B: Into<doc::Doc<'a, A::Doc>>,
@@ -140,7 +142,7 @@ impl<'a> Deref for RefDoc<'a> {
 /// An arena which can be used to allocate `Doc` values.
 pub type Arena<'a> = typed_arena::Arena<doc::Doc<'a, RefDoc<'a>>>;
 
-impl<'a> Allocator<'a> for Arena<'a> {
+impl<'a> DocAllocator<'a> for Arena<'a> {
     type Doc = RefDoc<'a>;
     
     fn alloc(&'a self, doc: doc::Doc<'a, Self::Doc>) -> Self::Doc {
@@ -152,7 +154,7 @@ pub struct BoxAllocator;
 
 static BOX_ALLOCATOR: BoxAllocator = BoxAllocator;
 
-impl<'a> Allocator<'a> for BoxAllocator {
+impl<'a> DocAllocator<'a> for BoxAllocator {
     type Doc = BoxDoc<'a>;
     
     fn alloc(&'a self, doc: doc::Doc<'a, Self::Doc>) -> Self::Doc {

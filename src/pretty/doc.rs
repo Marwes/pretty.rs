@@ -19,7 +19,7 @@ enum Mode {
 }
 
 /// The concrete document type. This type is not meant to be used directly. Instead use the static
-/// functions on `Doc` or the methods on an `Allocator`.
+/// functions on `Doc` or the methods on an `DocAllocator`.
 ///
 /// The `B` parameter is used to abstract over pointers to `Doc`. See `RefDoc` and `BoxDoc` for how
 /// it is used

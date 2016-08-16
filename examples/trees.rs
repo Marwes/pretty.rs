@@ -2,7 +2,7 @@ extern crate pretty;
 
 use pretty::{
     BoxAllocator,
-    Allocator,
+    DocAllocator,
     DocBuilder,
 };
 use std::io;
@@ -21,7 +21,7 @@ impl<'a> Forest<'a> {
     }
 
     fn bracket<'b, A>(&'b self, allocator: &'b A) -> DocBuilder<'b, A>
-    where A: Allocator<'b>
+    where A: DocAllocator<'b>
     {
         if (self.0).len() == 0 {
             allocator.nil()
@@ -37,7 +37,7 @@ impl<'a> Forest<'a> {
     }
 
     fn pretty<'b, A>(&'b self, allocator: &'b A) -> DocBuilder<'b, A>
-    where A: Allocator<'b>
+    where A: DocAllocator<'b>
     {
         let forest = self.0;
         let mut doc = allocator.nil();
@@ -83,7 +83,7 @@ impl<'a> Tree<'a> {
     }
 
     pub fn pretty<'b, A>(&'b self, allocator: &'b A) -> DocBuilder<'b, A>
-    where A: Allocator<'b>
+    where A: DocAllocator<'b>
     {
         allocator.text(&self.node[..])
             .append((self.forest).bracket(allocator))
