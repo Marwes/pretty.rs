@@ -209,3 +209,18 @@ impl<'a> Doc<'a, BoxDoc<'a>> {
         DocBuilder(&BOX_ALLOCATOR, self).nest(offset).into()
     }
 }
+
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::str::from_utf8;
+
+    #[test]
+    fn box_doc_inference() {
+        let doc = Doc::group(Doc::text("test").append(Doc::newline()).append(Doc::text("test")));
+        let mut vec = Vec::new();
+        doc.render(70, &mut vec).unwrap();
+        assert_eq!(from_utf8(&vec).unwrap(), "test test\n");
+    }
+}
