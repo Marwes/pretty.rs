@@ -236,13 +236,13 @@ mod tests {
     #[test]
     fn box_doc_inference() {
         let doc = Doc::group(Doc::text("test").append(Doc::space()).append(Doc::text("test")));
-        test!(doc, "test test\n");
+        test!(doc, "test test");
     }
 
     #[test]
     fn forced_newline() {
         let doc = Doc::group(Doc::text("test").append(Doc::newline()).append(Doc::text("test")));
-        test!(doc, "test\ntest\n");
+        test!(doc, "test\ntest");
     }
 
     #[test]
@@ -255,6 +255,6 @@ mod tests {
                 .nest(2))
             .append(Doc::space())
             .append(Doc::text("}")));
-        test!(5, doc, "{\n  test\n  test\n}\n");
+        test!(5, doc, "{\n  test\n  test\n}");
     }
 }

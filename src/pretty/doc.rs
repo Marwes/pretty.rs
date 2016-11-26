@@ -41,7 +41,7 @@ impl<'a, B> Doc<'a, B> {
     pub fn render<'b, W: ?Sized + io::Write>(&'b self, width: usize, out: &mut W) -> io::Result<()>
         where B: Deref<Target = Doc<'b, B>>
     {
-        best(self, width, out).and_then(|()| out.write_all(b"\n"))
+        best(self, width, out)
     }
 }
 
