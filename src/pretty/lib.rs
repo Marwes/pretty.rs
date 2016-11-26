@@ -80,7 +80,8 @@ pub trait DocAllocator<'a> {
 
     #[inline]
     fn concat<I>(&'a self, docs: I) -> DocBuilder<'a, Self>
-        where I: IntoIterator<Item = doc::Doc<'a, Self::Doc>>
+        where I: IntoIterator,
+              I::Item: Into<doc::Doc<'a, Self::Doc>>
     {
         docs.into_iter().fold(self.nil(), |a, b| a.append(b))
     }
