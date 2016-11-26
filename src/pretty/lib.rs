@@ -82,7 +82,9 @@ pub trait DocAllocator<'a> {
 
     #[inline]
     fn text<T: Into<Cow<'a, str>>>(&'a self, data: T) -> DocBuilder<'a, Self> {
-        DocBuilder(self, Text(data.into()))
+        let text = data.into();
+        debug_assert!(!text.contains(|c: char| c == '\n' || c == '\r'));
+        DocBuilder(self, Text(text))
     }
 
     #[inline]
@@ -190,7 +192,9 @@ impl<'a, B> Doc<'a, B> {
 
     #[inline]
     pub fn text<T: Into<Cow<'a, str>>>(data: T) -> Doc<'a, B> {
-        Text(data.into())
+        let text = data.into();
+        debug_assert!(!text.contains(|c: char| c == '\n' || c == '\r'));
+        Text(text)
     }
 
     #[inline]
