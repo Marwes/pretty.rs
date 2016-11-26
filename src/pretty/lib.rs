@@ -37,8 +37,15 @@ impl<'a> Deref for BoxDoc<'a> {
 
 /// The `DocBuilder` type allows for convenient appending of documents even for arena allocated
 /// documents by storing the arena inline.
+#[derive(Eq, Ord, PartialEq, PartialOrd)]
 pub struct DocBuilder<'a, A: ?Sized>(pub &'a A, pub doc::Doc<'a, A::Doc>)
     where A: DocAllocator<'a> + 'a;
+
+impl<'a, A: DocAllocator<'a> + 'a> Clone for DocBuilder<'a, A> {
+    fn clone(&self) -> Self {
+        DocBuilder(self.0, self.1.clone())
+    }
+}
 
 impl<'a, A: ?Sized> Into<doc::Doc<'a, A::Doc>> for DocBuilder<'a, A>
     where A: DocAllocator<'a>
