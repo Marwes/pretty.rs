@@ -155,8 +155,16 @@ pub type Arena<'a> = typed_arena::Arena<doc::Doc<'a, RefDoc<'a>>>;
 impl<'a> DocAllocator<'a> for Arena<'a> {
     type Doc = RefDoc<'a>;
 
+    #[inline]
     fn alloc(&'a self, doc: doc::Doc<'a, Self::Doc>) -> Self::Doc {
-        RefDoc(Arena::alloc(self, doc))
+        static SPACE: doc::Doc<'static, RefDoc<'static>> = Doc::Space;
+        static NEWLINE: doc::Doc<'static, RefDoc<'static>> = Doc::Newline;
+
+        RefDoc(match doc {
+            Space => &SPACE,
+            Newline => &NEWLINE,
+            _ => Arena::alloc(self, doc),
+        })
     }
 }
 
@@ -167,6 +175,7 @@ static BOX_ALLOCATOR: BoxAllocator = BoxAllocator;
 impl<'a> DocAllocator<'a> for BoxAllocator {
     type Doc = BoxDoc<'a>;
 
+    #[inline]
     fn alloc(&'a self, doc: doc::Doc<'a, Self::Doc>) -> Self::Doc {
         BoxDoc::new(doc)
     }
