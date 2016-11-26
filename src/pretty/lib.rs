@@ -5,14 +5,7 @@
 //! See `Doc` and
 extern crate typed_arena;
 
-use doc::Doc::{
-    Append,
-    Group,
-    Nest,
-    Newline,
-    Nil,
-    Text,
-};
+use doc::Doc::{Append, Group, Nest, Newline, Nil, Space, Text};
 use std::borrow::Cow;
 use std::fmt;
 use std::ops::Deref;
@@ -36,7 +29,7 @@ impl<'a> BoxDoc<'a> {
 
 impl<'a> Deref for BoxDoc<'a> {
     type Target = doc::Doc<'a, BoxDoc<'a>>;
-    
+
     fn deref(&self) -> &Self::Target {
         &self.0
     }
@@ -47,7 +40,7 @@ impl<'a> Deref for BoxDoc<'a> {
 pub struct DocBuilder<'a, A: ?Sized>(pub &'a A, pub doc::Doc<'a, A::Doc>)
     where A: DocAllocator<'a> + 'a;
 
-impl <'a, A: ?Sized> Into<doc::Doc<'a, A::Doc>> for DocBuilder<'a, A>
+impl<'a, A: ?Sized> Into<doc::Doc<'a, A::Doc>> for DocBuilder<'a, A>
     where A: DocAllocator<'a>
 {
     fn into(self) -> doc::Doc<'a, A::Doc> {
@@ -71,6 +64,11 @@ pub trait DocAllocator<'a> {
     }
 
     #[inline]
+    fn space(&'a self) -> DocBuilder<'a, Self> {
+        DocBuilder(self, Space)
+    }
+
+    #[inline]
     fn as_string<T: ToString>(&'a self, t: T) -> DocBuilder<'a, Self> {
         self.text(t.to_string())
     }
@@ -82,40 +80,42 @@ pub trait DocAllocator<'a> {
 
     #[inline]
     fn concat<I>(&'a self, docs: I) -> DocBuilder<'a, Self>
-    where I: IntoIterator<Item = doc::Doc<'a, Self::Doc>>
+        where I: IntoIterator<Item = doc::Doc<'a, Self::Doc>>
     {
         docs.into_iter().fold(self.nil(), |a, b| a.append(b))
     }
 }
 
 
-impl<'a, 's, A: ?Sized> DocBuilder<'a, A> where A: DocAllocator<'a> {
+impl<'a, 's, A: ?Sized> DocBuilder<'a, A>
+    where A: DocAllocator<'a>
+{
     #[inline]
     pub fn append<B>(self, that: B) -> DocBuilder<'a, A>
-    where B: Into<doc::Doc<'a, A::Doc>>,
+        where B: Into<doc::Doc<'a, A::Doc>>
     {
         let DocBuilder(allocator, this) = self;
         let that = that.into();
         let doc = match this {
-            Nil  => that,
-            _ => match that {
-                Nil  => this,
-                _ => Append(allocator.alloc(this), allocator.alloc(that)),
+            Nil => that,
+            _ => {
+                match that {
+                    Nil => this,
+                    _ => Append(allocator.alloc(this), allocator.alloc(that)),
+                }
             }
         };
         DocBuilder(allocator, doc)
     }
 
     #[inline]
-    pub fn group(self) -> DocBuilder<'a, A>
-    {
+    pub fn group(self) -> DocBuilder<'a, A> {
         let DocBuilder(allocator, this) = self;
         DocBuilder(allocator, Group(allocator.alloc(this)))
     }
 
     #[inline]
-    pub fn nest(self, offset: usize) -> DocBuilder<'a, A>
-    {
+    pub fn nest(self, offset: usize) -> DocBuilder<'a, A> {
         let DocBuilder(allocator, this) = self;
         DocBuilder(allocator, Nest(offset, allocator.alloc(this)))
     }
@@ -133,7 +133,7 @@ impl<'a> fmt::Debug for RefDoc<'a> {
 
 impl<'a> Deref for RefDoc<'a> {
     type Target = doc::Doc<'a, RefDoc<'a>>;
-    
+
     fn deref(&self) -> &doc::Doc<'a, RefDoc<'a>> {
         &self.0
     }
@@ -144,7 +144,7 @@ pub type Arena<'a> = typed_arena::Arena<doc::Doc<'a, RefDoc<'a>>>;
 
 impl<'a> DocAllocator<'a> for Arena<'a> {
     type Doc = RefDoc<'a>;
-    
+
     fn alloc(&'a self, doc: doc::Doc<'a, Self::Doc>) -> Self::Doc {
         RefDoc(Arena::alloc(self, doc))
     }
@@ -156,7 +156,7 @@ static BOX_ALLOCATOR: BoxAllocator = BoxAllocator;
 
 impl<'a> DocAllocator<'a> for BoxAllocator {
     type Doc = BoxDoc<'a>;
-    
+
     fn alloc(&'a self, doc: doc::Doc<'a, Self::Doc>) -> Self::Doc {
         BoxDoc::new(doc)
     }
@@ -184,6 +184,11 @@ impl<'a, B> Doc<'a, B> {
     pub fn text<T: Into<Cow<'a, str>>>(data: T) -> Doc<'a, B> {
         Text(data.into())
     }
+
+    #[inline]
+    pub fn space() -> Doc<'a, B> {
+        Space
+    }
 }
 
 impl<'a> Doc<'a, BoxDoc<'a>> {
@@ -194,7 +199,7 @@ impl<'a> Doc<'a, BoxDoc<'a>> {
 
     #[inline]
     pub fn concat<I>(&'a self, docs: I) -> Doc<'a, BoxDoc<'a>>
-    where I: IntoIterator<Item = Doc<'a, BoxDoc<'a>>>
+        where I: IntoIterator<Item = Doc<'a, BoxDoc<'a>>>
     {
         docs.into_iter().fold(Doc::nil(), |a, b| a.append(b))
     }
@@ -216,11 +221,40 @@ mod tests {
     use super::*;
     use std::str::from_utf8;
 
+    macro_rules! test {
+        ($size: expr, $actual: expr, $expected: expr) => {
+            let mut vec = Vec::new();
+            $actual.render($size, &mut vec).unwrap();
+            assert_eq!(from_utf8(&vec).unwrap(), $expected);
+        };
+        ($actual: expr, $expected: expr) => {
+            test!(70, $actual, $expected)
+        }
+    }
+
+
     #[test]
     fn box_doc_inference() {
+        let doc = Doc::group(Doc::text("test").append(Doc::space()).append(Doc::text("test")));
+        test!(doc, "test test\n");
+    }
+
+    #[test]
+    fn forced_newline() {
         let doc = Doc::group(Doc::text("test").append(Doc::newline()).append(Doc::text("test")));
-        let mut vec = Vec::new();
-        doc.render(70, &mut vec).unwrap();
-        assert_eq!(from_utf8(&vec).unwrap(), "test test\n");
+        test!(doc, "test\ntest\n");
+    }
+
+    #[test]
+    fn block() {
+        let doc = Doc::group(Doc::text("{")
+            .append(Doc::space()
+                .append(Doc::text("test"))
+                .append(Doc::space())
+                .append(Doc::text("test"))
+                .nest(2))
+            .append(Doc::space())
+            .append(Doc::text("}")));
+        test!(5, doc, "{\n  test\n  test\n}\n");
     }
 }
