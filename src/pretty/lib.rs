@@ -106,14 +106,10 @@ impl<'a, 's, A: ?Sized> DocBuilder<'a, A>
     {
         let DocBuilder(allocator, this) = self;
         let that = that.into();
-        let doc = match this {
-            Nil => that,
-            _ => {
-                match that {
-                    Nil => this,
-                    _ => Append(allocator.alloc(this), allocator.alloc(that)),
-                }
-            }
+        let doc = match (this, that) {
+            (Nil, that) => that,
+            (this, Nil) => this,
+            (this, that) => Append(allocator.alloc(this), allocator.alloc(that)),
         };
         DocBuilder(allocator, doc)
     }
