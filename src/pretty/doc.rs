@@ -165,7 +165,10 @@ pub fn best<'a, W: ?Sized + io::Write, B>(doc: &'a Doc<'a, B>,
                 }
                 pos = ind;
             }
-            &Newline => try!(write_newline(ind, out)),
+            &Newline => {
+                try!(write_newline(ind, out));
+                pos = ind;
+            }
             &Text(ref s) => {
                 try!(out.write_all(&s.as_bytes()));
                 pos += s.len();
