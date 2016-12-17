@@ -89,7 +89,15 @@ fn fitting<'a, B>(next: Cmd<'a, B>,
                     &Nil => {}
                     &Append(ref ldoc, ref rdoc) => {
                         fcmds.push((ind, mode, rdoc));
-                        fcmds.push((ind, mode, ldoc));
+                        // Since appended documents often appear in sequence on the left side we
+                        // gain a slight performance increase by batching these pushes (avoiding
+                        // to push and directly pop `Append` documents)
+                        let mut doc = ldoc;
+                        while let Append(ref l, ref r) = **doc {
+                            fcmds.push((ind, mode, r));
+                            doc = l;
+                        }
+                        fcmds.push((ind, mode, doc));
                     }
                     &Group(ref doc) => {
                         fcmds.push((ind, mode, doc));
@@ -133,7 +141,12 @@ pub fn best<'a, W: ?Sized + io::Write, B>(doc: &'a Doc<'a, B>,
             &Nil => {}
             &Append(ref ldoc, ref rdoc) => {
                 bcmds.push((ind, mode, rdoc));
-                bcmds.push((ind, mode, ldoc));
+                let mut doc = ldoc;
+                while let Append(ref l, ref r) = **doc {
+                    bcmds.push((ind, mode, r));
+                    doc = l;
+                }
+                bcmds.push((ind, mode, doc));
             }
             &Group(ref doc) => {
                 match mode {
