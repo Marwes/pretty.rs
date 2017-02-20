@@ -2,7 +2,175 @@
 //! [Wadler-style](http://homepages.inf.ed.ac.uk/wadler/papers/prettier/prettier.pdf)
 //! pretty-printing API.
 //!
-//! See `Doc` and
+//! Start with with the static functions of [Doc](enum.Doc.html).
+//!
+//! ## Quick start
+//!
+//! Let's pretty-print simple sexps!  We want to pretty print sexps like
+//!
+//! ```lisp
+//! (1 2 3)
+//! ```
+//! or, if the line would be too long, like
+//!
+//! ```lisp
+//! ((1)
+//!  (2 3)
+//!  (4 5 6))
+//! ```
+//!
+//! A _simple symbolic expression_ consists of a numeric _atom_ or a nested ordered _list_ of
+//! symbolic expression children.
+//!
+//! ```rust
+//! # extern crate pretty;
+//! # use pretty::*;
+//! enum SExp {
+//!     Atom(u32),
+//!     List(Vec<SExp>),
+//! }
+//! use SExp::*;
+//! # fn main() { }
+//! ```
+//!
+//! We define a simple conversion to a [Doc](enum.Doc.html).  Atoms are rendered as strings; lists
+//! are recursively rendered, with spaces between children where appropriate.  Children are
+//! [nested]() and [grouped](), allowing them to be laid out in a single line as appropriate.
+//!
+//! ```rust
+//! # extern crate pretty;
+//! # use pretty::*;
+//! # enum SExp {
+//! #     Atom(u32),
+//! #     List(Vec<SExp>),
+//! # }
+//! # use SExp::*;
+//! impl SExp {
+//!     /// Return a pretty printed format of self.
+//!     pub fn to_doc(&self) -> Doc<BoxDoc> {
+//!         match self {
+//!             &Atom(x) => Doc::as_string(x),
+//!             &List(ref xs) => {
+//!                 // `intersperse` without the itertools crate.
+//!                 let mut ds = Vec::new();
+//!                 for x in xs {
+//!                     ds.push(x.to_doc());
+//!                     ds.push(Doc::space());
+//!                 }
+//!                 if !xs.is_empty() {
+//!                     ds.pop(); // Remove trailing space.
+//!                 }
+//!                 Doc::text("(")
+//!                     .append(Doc::concat(ds).nest(1).group())
+//!                     .append(Doc::text(")"))
+//!             }
+//!         }
+//!     }
+//! }
+//! # fn main() { }
+//! ```
+//!
+//! Next, we convert the [Doc](enum.Doc.html) to a plain old string.
+//!
+//! ```rust
+//! # extern crate pretty;
+//! # use pretty::*;
+//! # enum SExp {
+//! #     Atom(u32),
+//! #     List(Vec<SExp>),
+//! # }
+//! # use SExp::*;
+//! # impl SExp {
+//! #     /// Return a pretty printed format of self.
+//! #     pub fn to_doc(&self) -> Doc<BoxDoc> {
+//! #         match self {
+//! #             &Atom(x) => Doc::as_string(x),
+//! #             &List(ref xs) => {
+//! #                 // `intersperse` without the itertools crate.
+//! #                 let mut ds = Vec::new();
+//! #                 for x in xs {
+//! #                     ds.push(x.to_doc());
+//! #                     ds.push(Doc::space());
+//! #                 }
+//! #                 if !xs.is_empty() {
+//! #                     ds.pop(); // Remove trailing space.
+//! #                 }
+//! #                 Doc::text("(")
+//! #                     .append(Doc::concat(ds).nest(1).group())
+//! #                     .append(Doc::text(")"))
+//! #             }
+//! #         }
+//! #     }
+//! # }
+//! impl SExp {
+//!     pub fn to_pretty(&self, width: usize) -> String {
+//!         let mut w = Vec::new();
+//!         self.to_doc().render(width, &mut w).unwrap();
+//!         String::from_utf8(w).unwrap()
+//!     }
+//! }
+//! # fn main() { }
+//! ```
+//!
+//! And finally we can test that the nesting and grouping behaves as we expected.
+//!
+//! ```rust
+//! # extern crate pretty;
+//! # use pretty::*;
+//! # enum SExp {
+//! #     Atom(u32),
+//! #     List(Vec<SExp>),
+//! # }
+//! # use SExp::*;
+//! # impl SExp {
+//! #     /// Return a pretty printed format of self.
+//! #     pub fn to_doc(&self) -> Doc<BoxDoc> {
+//! #         match self {
+//! #             &Atom(x) => Doc::as_string(x),
+//! #             &List(ref xs) => {
+//! #                 // `intersperse` without the itertools crate.
+//! #                 let mut ds = Vec::new();
+//! #                 for x in xs {
+//! #                     ds.push(x.to_doc());
+//! #                     ds.push(Doc::space());
+//! #                 }
+//! #                 if !xs.is_empty() {
+//! #                     ds.pop(); // Remove trailing space.
+//! #                 }
+//! #                 Doc::text("(")
+//! #                     .append(Doc::concat(ds).nest(1).group())
+//! #                     .append(Doc::text(")"))
+//! #             }
+//! #         }
+//! #     }
+//! # }
+//! # impl SExp {
+//! #     pub fn to_pretty(&self, width: usize) -> String {
+//! #         let mut w = Vec::new();
+//! #         self.to_doc().render(width, &mut w).unwrap();
+//! #         String::from_utf8(w).unwrap()
+//! #     }
+//! # }
+//! # fn main() {
+//! let atom = SExp::Atom(5);
+//! assert_eq!("5", atom.to_pretty(10));
+//! let list = SExp::List(vec![SExp::Atom(1), SExp::Atom(2), SExp::Atom(3)]);
+//! assert_eq!("(1 2 3)", list.to_pretty(10));
+//! assert_eq!("\
+//!(1
+//! 2
+//! 3)", list.to_pretty(5));
+//! # }
+//! ```
+//!
+//! ## Advanced usage
+//!
+//! There's a more efficient pattern that uses the [DocAllocator](trait.DocAllocator.html) trait, as
+//! implemented by [BoxAllocator](struct.BoxAllocator.html), to allocate
+//! [DocBuilder](struct.DocBuilder.html) instances.  See
+//! [examples/trees.rs](https://github.com/freebroccolo/pretty.rs/blob/master/examples/trees.rs#L39)
+//! for this approach.
+
 extern crate typed_arena;
 
 use doc::Doc::{Append, Group, Nest, Newline, Nil, Space, Text};
@@ -60,26 +228,35 @@ pub trait DocAllocator<'a> {
     type Doc: Deref<Target = doc::Doc<'a, Self::Doc>> + Clone;
     fn alloc(&'a self, doc::Doc<'a, Self::Doc>) -> Self::Doc;
 
+    /// Allocate an empty document.
     #[inline]
     fn nil(&'a self) -> DocBuilder<'a, Self> {
         DocBuilder(self, Nil)
     }
 
+    /// Allocate a single newline.
     #[inline]
     fn newline(&'a self) -> DocBuilder<'a, Self> {
         DocBuilder(self, Newline)
     }
 
+    /// Allocate a single space.
     #[inline]
     fn space(&'a self) -> DocBuilder<'a, Self> {
         DocBuilder(self, Space)
     }
 
+    /// Allocate a document containing the text `t.to_string()`.
+    ///
+    /// The given text must not contain line breaks.
     #[inline]
     fn as_string<T: ToString>(&'a self, t: T) -> DocBuilder<'a, Self> {
         self.text(t.to_string())
     }
 
+    /// Allocate a document containing the given text.
+    ///
+    /// The given text must not contain line breaks.
     #[inline]
     fn text<T: Into<Cow<'a, str>>>(&'a self, data: T) -> DocBuilder<'a, Self> {
         let text = data.into();
@@ -87,6 +264,7 @@ pub trait DocAllocator<'a> {
         DocBuilder(self, Text(text))
     }
 
+    /// Allocate a document concatenating the given documents.
     #[inline]
     fn concat<I>(&'a self, docs: I) -> DocBuilder<'a, Self>
         where I: IntoIterator,
@@ -100,6 +278,7 @@ pub trait DocAllocator<'a> {
 impl<'a, 's, A: ?Sized> DocBuilder<'a, A>
     where A: DocAllocator<'a>
 {
+    /// Append the given document after this document.
     #[inline]
     pub fn append<B>(self, that: B) -> DocBuilder<'a, A>
         where B: Into<doc::Doc<'a, A::Doc>>
@@ -114,14 +293,24 @@ impl<'a, 's, A: ?Sized> DocBuilder<'a, A>
         DocBuilder(allocator, doc)
     }
 
+    /// Mark this document as a group.
+    ///
+    /// Groups are layed out on a single line if possible.  Within a group, all basic documents with
+    /// several possible layouts are assigned the same layout, that is, they are all layed out
+    /// horizontally and combined into a one single line, or they are each layed out on their own
+    /// line.
     #[inline]
     pub fn group(self) -> DocBuilder<'a, A> {
         let DocBuilder(allocator, this) = self;
         DocBuilder(allocator, Group(allocator.alloc(this)))
     }
 
+    /// Increase the indentation level of this document.
     #[inline]
     pub fn nest(self, offset: usize) -> DocBuilder<'a, A> {
+        if offset == 0 {
+            return self;
+        }
         let DocBuilder(allocator, this) = self;
         DocBuilder(allocator, Nest(offset, allocator.alloc(this)))
     }
@@ -180,21 +369,27 @@ impl<'a> DocAllocator<'a> for BoxAllocator {
 pub use doc::Doc;
 
 impl<'a, B> Doc<'a, B> {
+    /// An empty document.
     #[inline]
     pub fn nil() -> Doc<'a, B> {
         Nil
     }
 
+    /// The text `t.to_string()`.
+    ///
+    /// The given text must not contain line breaks.
     #[inline]
     pub fn as_string<T: ToString>(t: T) -> Doc<'a, B> {
         Doc::text(t.to_string())
     }
 
+    /// A single newline.
     #[inline]
     pub fn newline() -> Doc<'a, B> {
         Newline
     }
 
+    /// The given text, which must not contain line breaks.
     #[inline]
     pub fn text<T: Into<Cow<'a, str>>>(data: T) -> Doc<'a, B> {
         let text = data.into();
@@ -202,6 +397,7 @@ impl<'a, B> Doc<'a, B> {
         Text(text)
     }
 
+    /// A space.
     #[inline]
     pub fn space() -> Doc<'a, B> {
         Space
@@ -209,23 +405,32 @@ impl<'a, B> Doc<'a, B> {
 }
 
 impl<'a> Doc<'a, BoxDoc<'a>> {
+    /// Append the given document after this document.
     #[inline]
     pub fn append(self, that: Doc<'a, BoxDoc<'a>>) -> Doc<'a, BoxDoc<'a>> {
         DocBuilder(&BOX_ALLOCATOR, self).append(that).into()
     }
 
+    /// A single document concatenating all the given documents.
     #[inline]
-    pub fn concat<I>(&'a self, docs: I) -> Doc<'a, BoxDoc<'a>>
+    pub fn concat<I>(docs: I) -> Doc<'a, BoxDoc<'a>>
         where I: IntoIterator<Item = Doc<'a, BoxDoc<'a>>>
     {
         docs.into_iter().fold(Doc::nil(), |a, b| a.append(b))
     }
 
+    /// Mark this document as a group.
+    ///
+    /// Groups are layed out on a single line if possible.  Within a group, all basic documents with
+    /// several possible layouts are assigned the same layout, that is, they are all layed out
+    /// horizontally and combined into a one single line, or they are each layed out on their own
+    /// line.
     #[inline]
     pub fn group(self) -> Doc<'a, BoxDoc<'a>> {
         DocBuilder(&BOX_ALLOCATOR, self).group().into()
     }
 
+    /// Increase the indentation level of this document.
     #[inline]
     pub fn nest(self, offset: usize) -> Doc<'a, BoxDoc<'a>> {
         DocBuilder(&BOX_ALLOCATOR, self).nest(offset).into()

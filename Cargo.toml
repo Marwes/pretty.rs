@@ -12,7 +12,7 @@ repository = "https://github.com/freebroccolo/pretty.rs"
 
 [lib]
 doc = true
-doctest = false
+doctest = true
 name = "pretty"
 path = "src/pretty/lib.rs"
 
