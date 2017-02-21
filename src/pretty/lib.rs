@@ -50,20 +50,10 @@
 //!     pub fn to_doc(&self) -> Doc<BoxDoc> {
 //!         match self {
 //!             &Atom(x) => Doc::as_string(x),
-//!             &List(ref xs) => {
-//!                 // `intersperse` without the itertools crate.
-//!                 let mut ds = Vec::new();
-//!                 for x in xs {
-//!                     ds.push(x.to_doc());
-//!                     ds.push(Doc::space());
-//!                 }
-//!                 if !xs.is_empty() {
-//!                     ds.pop(); // Remove trailing space.
-//!                 }
+//!             &List(ref xs) =>
 //!                 Doc::text("(")
-//!                     .append(Doc::concat(ds).nest(1).group())
+//!                     .append(Doc::intersperse(xs.into_iter().map(|x| x.to_doc()), Doc::space()).nest(1).group())
 //!                     .append(Doc::text(")"))
-//!             }
 //!         }
 //!     }
 //! }
@@ -85,20 +75,10 @@
 //! #     pub fn to_doc(&self) -> Doc<BoxDoc> {
 //! #         match self {
 //! #             &Atom(x) => Doc::as_string(x),
-//! #             &List(ref xs) => {
-//! #                 // `intersperse` without the itertools crate.
-//! #                 let mut ds = Vec::new();
-//! #                 for x in xs {
-//! #                     ds.push(x.to_doc());
-//! #                     ds.push(Doc::space());
-//! #                 }
-//! #                 if !xs.is_empty() {
-//! #                     ds.pop(); // Remove trailing space.
-//! #                 }
+//! #             &List(ref xs) =>
 //! #                 Doc::text("(")
-//! #                     .append(Doc::concat(ds).nest(1).group())
+//! #                     .append(Doc::intersperse(xs.into_iter().map(|x| x.to_doc()), Doc::space()).nest(1).group())
 //! #                     .append(Doc::text(")"))
-//! #             }
 //! #         }
 //! #     }
 //! # }
@@ -127,20 +107,10 @@
 //! #     pub fn to_doc(&self) -> Doc<BoxDoc> {
 //! #         match self {
 //! #             &Atom(x) => Doc::as_string(x),
-//! #             &List(ref xs) => {
-//! #                 // `intersperse` without the itertools crate.
-//! #                 let mut ds = Vec::new();
-//! #                 for x in xs {
-//! #                     ds.push(x.to_doc());
-//! #                     ds.push(Doc::space());
-//! #                 }
-//! #                 if !xs.is_empty() {
-//! #                     ds.pop(); // Remove trailing space.
-//! #                 }
+//! #             &List(ref xs) =>
 //! #                 Doc::text("(")
-//! #                     .append(Doc::concat(ds).nest(1).group())
+//! #                     .append(Doc::intersperse(xs.into_iter().map(|x| x.to_doc()), Doc::space()).nest(1).group())
 //! #                     .append(Doc::text(")"))
-//! #             }
 //! #         }
 //! #     }
 //! # }
@@ -271,6 +241,28 @@ pub trait DocAllocator<'a> {
               I::Item: Into<doc::Doc<'a, Self::Doc>>
     {
         docs.into_iter().fold(self.nil(), |a, b| a.append(b))
+    }
+
+    /// Allocate a document that intersperses the given separator `S` between the given documents
+    /// `[A, B, C, ..., Z]`, yielding `[A, S, B, S, C, S, ..., S, Z]`.
+    ///
+    /// Compare [the `intersperse` method from the `itertools` crate](https://docs.rs/itertools/0.5.9/itertools/trait.Itertools.html#method.intersperse).
+    #[inline]
+    fn intersperse<I, S>(&'a self, docs: I, separator: S) -> DocBuilder<'a, Self>
+        where I: IntoIterator,
+              I::Item: Into<doc::Doc<'a, Self::Doc>>,
+              S: Into<doc::Doc<'a, Self::Doc>> + Clone,
+    {
+        let mut result = self.nil();
+        let mut iter = docs.into_iter();
+        if let Some(first) = iter.next() {
+            result = result.append(first);
+        }
+        for doc in iter {
+            result = result.append(separator.clone());
+            result = result.append(doc);
+        }
+        result
     }
 }
 
@@ -417,6 +409,28 @@ impl<'a> Doc<'a, BoxDoc<'a>> {
         where I: IntoIterator<Item = Doc<'a, BoxDoc<'a>>>
     {
         docs.into_iter().fold(Doc::nil(), |a, b| a.append(b))
+    }
+
+    /// A single document interspersing the given separator `S` between the given documents.  For
+    /// example, if the documents are `[A, B, C, ..., Z]`, this yields `[A, S, B, S, C, S, ..., S, Z]`.
+    ///
+    /// Compare [the `intersperse` method from the `itertools` crate](https://docs.rs/itertools/0.5.9/itertools/trait.Itertools.html#method.intersperse).
+    #[inline]
+    pub fn intersperse<I, S>(docs: I, separator: S) -> Doc<'a, BoxDoc<'a>>
+        where I: IntoIterator<Item = Doc<'a, BoxDoc<'a>>>,
+              S: Into<Doc<'a, BoxDoc<'a>>> + Clone,
+    {
+        let separator = separator.into();
+        let mut result = Doc::nil();
+        let mut iter = docs.into_iter();
+        if let Some(first) = iter.next() {
+            result = result.append(first);
+        }
+        for doc in iter {
+            result = result.append(separator.clone());
+            result = result.append(doc);
+        }
+        result
     }
 
     /// Mark this document as a group.
