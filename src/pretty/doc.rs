@@ -1,5 +1,6 @@
 use std::borrow::Cow;
 use std::cmp;
+use std::fmt;
 use std::io;
 use std::ops::Deref;
 
@@ -36,30 +37,95 @@ where
     }
 }
 
+trait Render {
+    type Error;
+    fn write_str(&mut self, s: &str) -> Result<usize, Self::Error>;
+    fn write_str_all(&mut self, s: &str) -> Result<(), Self::Error>;
+}
+
+struct IoWrite<W>(W);
+impl<W> Render for IoWrite<W>
+where
+    W: io::Write,
+{
+    type Error = io::Error;
+
+    fn write_str(&mut self, s: &str) -> io::Result<usize> {
+        self.0.write(s.as_bytes())
+    }
+    fn write_str_all(&mut self, s: &str) -> io::Result<()> {
+        self.0.write_all(s.as_bytes())
+    }
+}
+
+struct FmtWrite<W>(W);
+impl<W> Render for FmtWrite<W>
+where
+    W: fmt::Write,
+{
+    type Error = fmt::Error;
+
+    fn write_str(&mut self, s: &str) -> Result<usize, fmt::Error> {
+        self.write_str_all(s).map(|_| s.len())
+    }
+    fn write_str_all(&mut self, s: &str) -> fmt::Result {
+        self.0
+            .write_str(s)
+    }
+}
+
 impl<'a, B> Doc<'a, B> {
     /// Writes a rendered document.
     #[inline]
-    pub fn render<'b, W: ?Sized + io::Write>(&'b self, width: usize, out: &mut W) -> io::Result<()>
+    pub fn render<'b, W>(&'b self, width: usize, out: &mut W) -> io::Result<()>
     where
         B: Deref<Target = Doc<'b, B>>,
+        W: ?Sized + io::Write
     {
-        best(self, width, out)
+        best(self, width, &mut IoWrite(out))
+    }
+
+    #[inline]
+    pub fn render_fmt<'b, W>(
+        &'b self,
+        width: usize,
+        out: &mut W,
+    ) -> fmt::Result
+    where
+        B: Deref<Target = Doc<'b, B>>,
+        W: ?Sized + fmt::Write
+    {
+        best(self, width, &mut FmtWrite(out))
     }
 }
 
 type Cmd<'a, B> = (usize, Mode, &'a Doc<'a, B>);
 
-fn write_newline<W: ?Sized + io::Write>(ind: usize, out: &mut W) -> io::Result<()> {
-    try!(out.write_all(b"\n"));
+fn write_newline<W>(ind: usize, out: &mut W) -> Result<(), W::Error>
+where
+    W: ?Sized + Render,
+{
+    try!(out.write_str_all("\n"));
     write_spaces(ind, out)
 }
 
-fn write_spaces<W: ?Sized + io::Write>(spaces: usize, out: &mut W) -> io::Result<()> {
-    const SPACES: [u8; 100] = [b' '; 100];
+fn write_spaces<W>(spaces: usize, out: &mut W) -> Result<(), W::Error>
+where
+    W: ?Sized + Render,
+{
+    macro_rules! make_spaces {
+        () => {
+            ""
+        };
+        ($s: tt $($t: tt)*) => {
+            concat!("          ", make_spaces!($($t)*))
+        };
+    }
+    const SPACES: &str = make_spaces!(,,,,,,,,,,);
     let mut inserted = 0;
     while inserted < spaces {
-        let insert = cmp::min(100, spaces - inserted);
-        inserted += try!(out.write(&SPACES[..insert]));
+        let insert = cmp::min(SPACES.len(), spaces - inserted);
+        inserted += try!(out.write_str(&SPACES[..insert]));
     }
     Ok(())
 }
@@ -131,13 +197,10 @@ where
 }
 
 #[inline]
-pub fn best<'a, W: ?Sized + io::Write, B>(
-    doc: &'a Doc<'a, B>,
-    width: usize,
-    out: &mut W,
-) -> io::Result<()>
+fn best<'a, W, B>(doc: &'a Doc<'a, B>, width: usize, out: &mut W) -> Result<(), W::Error>
 where
     B: Deref<Target = Doc<'a, B>>,
+    W: ?Sized + Render,
 {
     let mut pos = 0usize;
     let mut bcmds = vec![(0usize, Mode::Break, doc)];
@@ -189,7 +252,7 @@ where
                 pos = ind;
             }
             &Text(ref s) => {
-                try!(out.write_all(&s.as_bytes()));
+                try!(out.write_str_all(s));
                 pos += s.len();
             }
         }

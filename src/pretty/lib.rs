@@ -463,13 +463,12 @@ impl<'a> Doc<'a, BoxDoc<'a>> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::str::from_utf8;
 
     macro_rules! test {
         ($size: expr, $actual: expr, $expected: expr) => {
-            let mut vec = Vec::new();
-            $actual.render($size, &mut vec).unwrap();
-            assert_eq!(from_utf8(&vec).unwrap(), $expected);
+            let mut s = String::new();
+            $actual.render_fmt($size, &mut s).unwrap();
+            assert_eq!(s, $expected);
         };
         ($actual: expr, $expected: expr) => {
             test!(70, $actual, $expected)
