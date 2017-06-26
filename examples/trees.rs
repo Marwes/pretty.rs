@@ -40,24 +40,8 @@ impl<'a> Forest<'a> {
     where A: DocAllocator<'b>
     {
         let forest = self.0;
-        let mut doc = allocator.nil();
-        let mut i = 0;
-        let k = forest.len() - 1;
-        loop {
-            if i < k {
-                doc = doc
-                    .append(forest[i].pretty(allocator)
-                        .append(allocator.text(","))
-                        .append(allocator.newline()));
-            }
-            else if i == k {
-                doc = doc
-                    .append(forest[i].pretty(allocator));
-                break
-            }
-            i += 1;
-        }
-        doc
+        let separator = allocator.text(",").append(allocator.newline());
+        allocator.intersperse(forest.into_iter().map(|tree| tree.pretty(allocator)), separator)
     }
 }
 
