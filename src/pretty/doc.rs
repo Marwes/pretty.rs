@@ -69,33 +69,66 @@ where
         self.write_str_all(s).map(|_| s.len())
     }
     fn write_str_all(&mut self, s: &str) -> fmt::Result {
-        self.0
-            .write_str(s)
+        self.0.write_str(s)
+    }
+}
+
+pub struct Pretty<'a, D>
+where
+    D: 'a,
+{
+    doc: &'a Doc<'a, D>,
+    width: usize,
+}
+
+impl<'a, D> fmt::Display for Pretty<'a, D>
+where
+    D: Deref<Target = Doc<'a, D>>,
+{
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        self.doc.render_fmt(self.width, f)
     }
 }
 
 impl<'a, B> Doc<'a, B> {
-    /// Writes a rendered document.
+    /// Writes a rendered document to a `std::io::Write` object.
     #[inline]
     pub fn render<'b, W>(&'b self, width: usize, out: &mut W) -> io::Result<()>
     where
         B: Deref<Target = Doc<'b, B>>,
-        W: ?Sized + io::Write
+        W: ?Sized + io::Write,
     {
         best(self, width, &mut IoWrite(out))
     }
 
+    /// Writes a rendered document to a `std::fmt::Write` object.
     #[inline]
-    pub fn render_fmt<'b, W>(
-        &'b self,
-        width: usize,
-        out: &mut W,
-    ) -> fmt::Result
+    pub fn render_fmt<'b, W>(&'b self, width: usize, out: &mut W) -> fmt::Result
     where
         B: Deref<Target = Doc<'b, B>>,
-        W: ?Sized + fmt::Write
+        W: ?Sized + fmt::Write,
     {
         best(self, width, &mut FmtWrite(out))
+    }
+
+    /// Returns a value which implements `std::fmt::Display`
+    ///
+    /// ```
+    /// use pretty::Doc;
+    /// let doc = Doc::group(
+    ///     Doc::text("hello").append(Doc::space()).append(Doc::text("world"))
+    /// );
+    /// assert_eq!(format!("{}", doc.pretty(80)), "hello world");
+    /// ```
+    #[inline]
+    pub fn pretty<'b>(&'b self, width: usize) -> Pretty<'b, B>
+    where
+        B: Deref<Target = Doc<'b, B>>,
+    {
+        Pretty {
+            doc: self,
+            width: width,
+        }
     }
 }
 
