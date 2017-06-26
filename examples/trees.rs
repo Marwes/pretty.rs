@@ -1,10 +1,6 @@
 extern crate pretty;
 
-use pretty::{
-    BoxAllocator,
-    DocAllocator,
-    DocBuilder,
-};
+use pretty::{BoxAllocator, DocAllocator, DocBuilder};
 use std::io;
 use std::str;
 
@@ -21,27 +17,30 @@ impl<'a> Forest<'a> {
     }
 
     fn bracket<'b, A>(&'b self, allocator: &'b A) -> DocBuilder<'b, A>
-    where A: DocAllocator<'b>
+    where
+        A: DocAllocator<'b>,
     {
         if (self.0).len() == 0 {
             allocator.nil()
         } else {
-            allocator.text("[")
-                .append(
-                    allocator.newline()
-                        .append(self.pretty(allocator))
-                        .nest(2))
+            allocator
+                .text("[")
+                .append(allocator.newline().append(self.pretty(allocator)).nest(2))
                 .append(allocator.newline())
                 .append(allocator.text("]"))
         }
     }
 
     fn pretty<'b, A>(&'b self, allocator: &'b A) -> DocBuilder<'b, A>
-    where A: DocAllocator<'b>
+    where
+        A: DocAllocator<'b>,
     {
         let forest = self.0;
         let separator = allocator.text(",").append(allocator.newline());
-        allocator.intersperse(forest.into_iter().map(|tree| tree.pretty(allocator)), separator)
+        allocator.intersperse(
+            forest.into_iter().map(|tree| tree.pretty(allocator)),
+            separator,
+        )
     }
 }
 
@@ -67,9 +66,11 @@ impl<'a> Tree<'a> {
     }
 
     pub fn pretty<'b, A>(&'b self, allocator: &'b A) -> DocBuilder<'b, A>
-    where A: DocAllocator<'b>
+    where
+        A: DocAllocator<'b>,
     {
-        allocator.text(&self.node[..])
+        allocator
+            .text(&self.node[..])
             .append((self.forest).bracket(allocator))
             .group()
     }
@@ -78,15 +79,8 @@ impl<'a> Tree<'a> {
 #[allow(dead_code)]
 pub fn main() {
     let allocator = BoxAllocator;
-    let bbbbbbs = [
-        Tree::node("ccc"),
-        Tree::node("dd"),
-    ];
-    let ffffs = [
-        Tree::node("gg"),
-        Tree::node("hhh"),
-        Tree::node("ii"),
-    ];
+    let bbbbbbs = [Tree::node("ccc"), Tree::node("dd")];
+    let ffffs = [Tree::node("gg"), Tree::node("hhh"), Tree::node("ii")];
     let aaas = [
         Tree::node_with_forest("bbbbbb", &bbbbbbs),
         Tree::node("eee"),

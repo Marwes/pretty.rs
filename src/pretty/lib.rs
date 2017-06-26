@@ -177,7 +177,8 @@ impl<'a> Deref for BoxDoc<'a> {
 /// documents by storing the arena inline.
 #[derive(Eq, Ord, PartialEq, PartialOrd)]
 pub struct DocBuilder<'a, A: ?Sized>(pub &'a A, pub doc::Doc<'a, A::Doc>)
-    where A: DocAllocator<'a> + 'a;
+where
+    A: DocAllocator<'a> + 'a;
 
 impl<'a, A: DocAllocator<'a> + 'a> Clone for DocBuilder<'a, A> {
     fn clone(&self) -> Self {
@@ -186,7 +187,8 @@ impl<'a, A: DocAllocator<'a> + 'a> Clone for DocBuilder<'a, A> {
 }
 
 impl<'a, A: ?Sized> Into<doc::Doc<'a, A::Doc>> for DocBuilder<'a, A>
-    where A: DocAllocator<'a>
+where
+    A: DocAllocator<'a>,
 {
     fn into(self) -> doc::Doc<'a, A::Doc> {
         self.1
@@ -237,8 +239,9 @@ pub trait DocAllocator<'a> {
     /// Allocate a document concatenating the given documents.
     #[inline]
     fn concat<I>(&'a self, docs: I) -> DocBuilder<'a, Self>
-        where I: IntoIterator,
-              I::Item: Into<doc::Doc<'a, Self::Doc>>
+    where
+        I: IntoIterator,
+        I::Item: Into<doc::Doc<'a, Self::Doc>>,
     {
         docs.into_iter().fold(self.nil(), |a, b| a.append(b))
     }
@@ -249,9 +252,10 @@ pub trait DocAllocator<'a> {
     /// Compare [the `intersperse` method from the `itertools` crate](https://docs.rs/itertools/0.5.9/itertools/trait.Itertools.html#method.intersperse).
     #[inline]
     fn intersperse<I, S>(&'a self, docs: I, separator: S) -> DocBuilder<'a, Self>
-        where I: IntoIterator,
-              I::Item: Into<doc::Doc<'a, Self::Doc>>,
-              S: Into<doc::Doc<'a, Self::Doc>> + Clone,
+    where
+        I: IntoIterator,
+        I::Item: Into<doc::Doc<'a, Self::Doc>>,
+        S: Into<doc::Doc<'a, Self::Doc>> + Clone,
     {
         let mut result = self.nil();
         let mut iter = docs.into_iter();
@@ -268,12 +272,14 @@ pub trait DocAllocator<'a> {
 
 
 impl<'a, 's, A: ?Sized> DocBuilder<'a, A>
-    where A: DocAllocator<'a>
+where
+    A: DocAllocator<'a>,
 {
     /// Append the given document after this document.
     #[inline]
     pub fn append<B>(self, that: B) -> DocBuilder<'a, A>
-        where B: Into<doc::Doc<'a, A::Doc>>
+    where
+        B: Into<doc::Doc<'a, A::Doc>>,
     {
         let DocBuilder(allocator, this) = self;
         let that = that.into();
@@ -406,7 +412,8 @@ impl<'a> Doc<'a, BoxDoc<'a>> {
     /// A single document concatenating all the given documents.
     #[inline]
     pub fn concat<I>(docs: I) -> Doc<'a, BoxDoc<'a>>
-        where I: IntoIterator<Item = Doc<'a, BoxDoc<'a>>>
+    where
+        I: IntoIterator<Item = Doc<'a, BoxDoc<'a>>>,
     {
         docs.into_iter().fold(Doc::nil(), |a, b| a.append(b))
     }
@@ -417,8 +424,9 @@ impl<'a> Doc<'a, BoxDoc<'a>> {
     /// Compare [the `intersperse` method from the `itertools` crate](https://docs.rs/itertools/0.5.9/itertools/trait.Itertools.html#method.intersperse).
     #[inline]
     pub fn intersperse<I, S>(docs: I, separator: S) -> Doc<'a, BoxDoc<'a>>
-        where I: IntoIterator<Item = Doc<'a, BoxDoc<'a>>>,
-              S: Into<Doc<'a, BoxDoc<'a>>> + Clone,
+    where
+        I: IntoIterator<Item = Doc<'a, BoxDoc<'a>>>,
+        S: Into<Doc<'a, BoxDoc<'a>>> + Clone,
     {
         let separator = separator.into();
         let mut result = Doc::nil();
@@ -471,26 +479,38 @@ mod tests {
 
     #[test]
     fn box_doc_inference() {
-        let doc = Doc::group(Doc::text("test").append(Doc::space()).append(Doc::text("test")));
+        let doc = Doc::group(
+            Doc::text("test")
+                .append(Doc::space())
+                .append(Doc::text("test")),
+        );
         test!(doc, "test test");
     }
 
     #[test]
     fn forced_newline() {
-        let doc = Doc::group(Doc::text("test").append(Doc::newline()).append(Doc::text("test")));
+        let doc = Doc::group(
+            Doc::text("test")
+                .append(Doc::newline())
+                .append(Doc::text("test")),
+        );
         test!(doc, "test\ntest");
     }
 
     #[test]
     fn block() {
-        let doc = Doc::group(Doc::text("{")
-            .append(Doc::space()
-                .append(Doc::text("test"))
+        let doc = Doc::group(
+            Doc::text("{")
+                .append(
+                    Doc::space()
+                        .append(Doc::text("test"))
+                        .append(Doc::space())
+                        .append(Doc::text("test"))
+                        .nest(2),
+                )
                 .append(Doc::space())
-                .append(Doc::text("test"))
-                .nest(2))
-            .append(Doc::space())
-            .append(Doc::text("}")));
+                .append(Doc::text("}")),
+        );
         test!(5, doc, "{\n  test\n  test\n}");
     }
 }

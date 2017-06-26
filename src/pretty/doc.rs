@@ -28,7 +28,8 @@ pub enum Doc<'a, B> {
 }
 
 impl<'a, B, S> From<S> for Doc<'a, B>
-    where S: Into<Cow<'a, str>>
+where
+    S: Into<Cow<'a, str>>,
 {
     fn from(s: S) -> Doc<'a, B> {
         Doc::Text(s.into())
@@ -39,7 +40,8 @@ impl<'a, B> Doc<'a, B> {
     /// Writes a rendered document.
     #[inline]
     pub fn render<'b, W: ?Sized + io::Write>(&'b self, width: usize, out: &mut W) -> io::Result<()>
-        where B: Deref<Target = Doc<'b, B>>
+    where
+        B: Deref<Target = Doc<'b, B>>,
     {
         best(self, width, out)
     }
@@ -63,12 +65,14 @@ fn write_spaces<W: ?Sized + io::Write>(spaces: usize, out: &mut W) -> io::Result
 }
 
 #[inline]
-fn fitting<'a, B>(next: Cmd<'a, B>,
-                  bcmds: &Vec<Cmd<'a, B>>,
-                  fcmds: &mut Vec<Cmd<'a, B>>,
-                  mut rem: isize)
-                  -> bool
-    where B: Deref<Target = Doc<'a, B>>
+fn fitting<'a, B>(
+    next: Cmd<'a, B>,
+    bcmds: &Vec<Cmd<'a, B>>,
+    fcmds: &mut Vec<Cmd<'a, B>>,
+    mut rem: isize,
+) -> bool
+where
+    B: Deref<Target = Doc<'a, B>>,
 {
     let mut bidx = bcmds.len();
     fcmds.clear(); // clear from previous calls from best
@@ -127,11 +131,13 @@ fn fitting<'a, B>(next: Cmd<'a, B>,
 }
 
 #[inline]
-pub fn best<'a, W: ?Sized + io::Write, B>(doc: &'a Doc<'a, B>,
-                                          width: usize,
-                                          out: &mut W)
-                                          -> io::Result<()>
-    where B: Deref<Target = Doc<'a, B>>
+pub fn best<'a, W: ?Sized + io::Write, B>(
+    doc: &'a Doc<'a, B>,
+    width: usize,
+    out: &mut W,
+) -> io::Result<()>
+where
+    B: Deref<Target = Doc<'a, B>>,
 {
     let mut pos = 0usize;
     let mut bcmds = vec![(0usize, Mode::Break, doc)];
