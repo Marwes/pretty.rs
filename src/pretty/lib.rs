@@ -496,6 +496,18 @@ mod tests {
         test!(doc, "test\ntest");
     }
 
+    #[test]
+    fn space_do_not_reset_pos() {
+        let doc = Doc::group(
+            Doc::text("test")
+                .append(Doc::space()))
+                .append(Doc::text("test"))
+                .append(Doc::group(Doc::space())
+                    .append(Doc::text("test")))
+        ;
+        test!(9, doc, "test test\ntest");
+    }
+
     // Tests that the `Doc::newline()` does not cause the rest of document to think that it fits on
     // a single line but instead breaks on the `Doc::space()` to fit with 6 columns
     #[test]

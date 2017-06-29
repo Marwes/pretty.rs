@@ -276,9 +276,9 @@ where
                     }
                     Mode::Break => {
                         try!(write_newline(ind, out));
+                        pos = ind;
                     }
                 }
-                pos = ind;
             }
             &Newline => {
                 try!(write_newline(ind, out));
@@ -293,7 +293,7 @@ where
                 fcmds.extend_from_slice(&bcmds[docs..]);
                 if let Some(next) = fcmds.pop() {
                     let rem = width as isize - pos as isize;
-                    if !fitting(next, &bcmds, &mut fcmds, bcmds.len(), rem) {
+                    if !fitting(next, &bcmds, &mut fcmds, rem) {
                         for &mut (_, ref mut mode, _) in &mut bcmds[docs..] {
                             *mode = Mode::Break;
                         }
