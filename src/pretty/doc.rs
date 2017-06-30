@@ -73,12 +73,22 @@ where
     }
 }
 
+#[derive(Clone, Debug)]
 pub struct Pretty<'a, D>
 where
     D: 'a,
 {
     doc: &'a Doc<'a, D>,
     width: usize,
+    newline: &'a str
+}
+
+impl<'a, D> Pretty<'a, D> {
+    /// Sets the string used to break documents onto multiple lines. [default: "\n"]
+    pub fn newline(mut self, newline: &'a str) -> Pretty<'a, D> {
+        self.newline = newline;
+        self
+    }
 }
 
 impl<'a, D> fmt::Display for Pretty<'a, D>
@@ -86,7 +96,7 @@ where
     D: Deref<Target = Doc<'a, D>>,
 {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        self.doc.render_fmt(self.width, f)
+        best(self, &mut FmtWrite(f))
     }
 }
 
@@ -98,7 +108,7 @@ impl<'a, B> Doc<'a, B> {
         B: Deref<Target = Doc<'b, B>>,
         W: ?Sized + io::Write,
     {
-        best(self, width, &mut IoWrite(out))
+        best(&self.pretty(width), &mut IoWrite(out))
     }
 
     /// Writes a rendered document to a `std::fmt::Write` object.
@@ -108,7 +118,7 @@ impl<'a, B> Doc<'a, B> {
         B: Deref<Target = Doc<'b, B>>,
         W: ?Sized + fmt::Write,
     {
-        best(self, width, &mut FmtWrite(out))
+        best(&self.pretty(width), &mut FmtWrite(out))
     }
 
     /// Returns a value which implements `std::fmt::Display`
@@ -128,17 +138,18 @@ impl<'a, B> Doc<'a, B> {
         Pretty {
             doc: self,
             width: width,
+            newline: "\n"
         }
     }
 }
 
 type Cmd<'a, B> = (usize, Mode, &'a Doc<'a, B>);
 
-fn write_newline<W>(ind: usize, out: &mut W) -> Result<(), W::Error>
+fn write_newline<W>(ind: usize, newline: &str, out: &mut W) -> Result<(), W::Error>
 where
     W: ?Sized + Render,
 {
-    try!(out.write_str_all("\n"));
+    try!(out.write_str_all(newline));
     write_spaces(ind, out)
 }
 
@@ -230,11 +241,13 @@ where
 }
 
 #[inline]
-fn best<'a, W, B>(doc: &'a Doc<'a, B>, width: usize, out: &mut W) -> Result<(), W::Error>
+fn best<'a, W, B>(pretty: &Pretty<'a, B>, out: &mut W) -> Result<(), W::Error>
 where
     B: Deref<Target = Doc<'a, B>>,
     W: ?Sized + Render,
 {
+    let Pretty { doc, width, newline } = *pretty;
+
     let mut pos = 0usize;
     let mut bcmds = vec![(0usize, Mode::Break, doc)];
     let mut fcmds = vec![];
@@ -275,13 +288,13 @@ where
                         try!(write_spaces(1, out));
                     }
                     Mode::Break => {
-                        try!(write_newline(ind, out));
+                        try!(write_newline(ind, newline, out));
                         pos = ind;
                     }
                 }
             }
             &Newline => {
-                try!(write_newline(ind, out));
+                try!(write_newline(ind, newline, out));
                 pos = ind;
 
                 // Since this newline caused an early break we don't know if the remaining
