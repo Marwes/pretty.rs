@@ -335,6 +335,18 @@ impl<'a> Deref for RefDoc<'a> {
 /// An arena which can be used to allocate `Doc` values.
 pub type Arena<'a> = typed_arena::Arena<doc::Doc<'a, RefDoc<'a>>>;
 
+impl<'a, A> DocAllocator<'a> for &'a A
+where
+    A: ?Sized + DocAllocator<'a>,
+{
+    type Doc = A::Doc;
+
+    #[inline]
+    fn alloc(&'a self, doc: doc::Doc<'a, Self::Doc>) -> Self::Doc {
+        (**self).alloc(doc)
+    }
+}
+
 impl<'a> DocAllocator<'a> for Arena<'a> {
     type Doc = RefDoc<'a>;
 
