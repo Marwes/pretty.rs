@@ -39,7 +39,8 @@ impl<'a> Deref for BoxDoc<'a> {
 /// documents by storing the arena inline.
 #[derive(Eq, Ord, PartialEq, PartialOrd)]
 pub struct DocBuilder<'a, A: ?Sized>(pub &'a A, pub doc::Doc<'a, A::Doc>)
-    where A: DocAllocator<'a> + 'a;
+where
+    A: DocAllocator<'a> + 'a;
 
 impl<'a, A: DocAllocator<'a> + 'a> Clone for DocBuilder<'a, A> {
     fn clone(&self) -> Self {
@@ -48,7 +49,8 @@ impl<'a, A: DocAllocator<'a> + 'a> Clone for DocBuilder<'a, A> {
 }
 
 impl<'a, A: ?Sized> Into<doc::Doc<'a, A::Doc>> for DocBuilder<'a, A>
-    where A: DocAllocator<'a>
+where
+    A: DocAllocator<'a>,
 {
     fn into(self) -> doc::Doc<'a, A::Doc> {
         self.1
@@ -89,8 +91,9 @@ pub trait DocAllocator<'a> {
 
     #[inline]
     fn concat<I>(&'a self, docs: I) -> DocBuilder<'a, Self>
-        where I: IntoIterator,
-              I::Item: Into<doc::Doc<'a, Self::Doc>>
+    where
+        I: IntoIterator,
+        I::Item: Into<doc::Doc<'a, Self::Doc>>,
     {
         docs.into_iter().fold(self.nil(), |a, b| a.append(b))
     }
@@ -98,11 +101,13 @@ pub trait DocAllocator<'a> {
 
 
 impl<'a, 's, A: ?Sized> DocBuilder<'a, A>
-    where A: DocAllocator<'a>
+where
+    A: DocAllocator<'a>,
 {
     #[inline]
     pub fn append<B>(self, that: B) -> DocBuilder<'a, A>
-        where B: Into<doc::Doc<'a, A::Doc>>
+    where
+        B: Into<doc::Doc<'a, A::Doc>>,
     {
         let DocBuilder(allocator, this) = self;
         let that = that.into();
@@ -147,6 +152,18 @@ impl<'a> Deref for RefDoc<'a> {
 
 /// An arena which can be used to allocate `Doc` values.
 pub type Arena<'a> = typed_arena::Arena<doc::Doc<'a, RefDoc<'a>>>;
+
+impl<'a, A> DocAllocator<'a> for &'a A
+where
+    A: ?Sized + DocAllocator<'a>,
+{
+    type Doc = A::Doc;
+
+    #[inline]
+    fn alloc(&'a self, doc: doc::Doc<'a, Self::Doc>) -> Self::Doc {
+        (**self).alloc(doc)
+    }
+}
 
 impl<'a> DocAllocator<'a> for Arena<'a> {
     type Doc = RefDoc<'a>;
@@ -216,7 +233,8 @@ impl<'a> Doc<'a, BoxDoc<'a>> {
 
     #[inline]
     pub fn concat<I>(&'a self, docs: I) -> Doc<'a, BoxDoc<'a>>
-        where I: IntoIterator<Item = Doc<'a, BoxDoc<'a>>>
+    where
+        I: IntoIterator<Item = Doc<'a, BoxDoc<'a>>>,
     {
         docs.into_iter().fold(Doc::nil(), |a, b| a.append(b))
     }
@@ -252,26 +270,38 @@ mod tests {
 
     #[test]
     fn box_doc_inference() {
-        let doc = Doc::group(Doc::text("test").append(Doc::space()).append(Doc::text("test")));
+        let doc = Doc::group(
+            Doc::text("test")
+                .append(Doc::space())
+                .append(Doc::text("test")),
+        );
         test!(doc, "test test");
     }
 
     #[test]
     fn forced_newline() {
-        let doc = Doc::group(Doc::text("test").append(Doc::newline()).append(Doc::text("test")));
+        let doc = Doc::group(
+            Doc::text("test")
+                .append(Doc::newline())
+                .append(Doc::text("test")),
+        );
         test!(doc, "test\ntest");
     }
 
     #[test]
     fn block() {
-        let doc = Doc::group(Doc::text("{")
-            .append(Doc::space()
-                .append(Doc::text("test"))
+        let doc = Doc::group(
+            Doc::text("{")
+                .append(
+                    Doc::space()
+                        .append(Doc::text("test"))
+                        .append(Doc::space())
+                        .append(Doc::text("test"))
+                        .nest(2),
+                )
                 .append(Doc::space())
-                .append(Doc::text("test"))
-                .nest(2))
-            .append(Doc::space())
-            .append(Doc::text("}")));
+                .append(Doc::text("}")),
+        );
         test!(5, doc, "{\n  test\n  test\n}");
     }
 }

@@ -3,7 +3,7 @@ use std::cmp;
 use std::io;
 use std::ops::Deref;
 
-pub use self::Doc::{Nil, Append, Space, Group, Nest, Newline, Text};
+pub use self::Doc::{Append, Group, Nest, Newline, Nil, Space, Text};
 
 #[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
 enum Mode {
@@ -28,7 +28,8 @@ pub enum Doc<'a, B> {
 }
 
 impl<'a, B, S> From<S> for Doc<'a, B>
-    where S: Into<Cow<'a, str>>
+where
+    S: Into<Cow<'a, str>>,
 {
     fn from(s: S) -> Doc<'a, B> {
         Doc::Text(s.into())
@@ -39,7 +40,8 @@ impl<'a, B> Doc<'a, B> {
     /// Writes a rendered document.
     #[inline]
     pub fn render<'b, W: ?Sized + io::Write>(&'b self, width: usize, out: &mut W) -> io::Result<()>
-        where B: Deref<Target = Doc<'b, B>>
+    where
+        B: Deref<Target = Doc<'b, B>>,
     {
         best(self, width, out)
     }
@@ -63,12 +65,14 @@ fn write_spaces<W: ?Sized + io::Write>(spaces: usize, out: &mut W) -> io::Result
 }
 
 #[inline]
-fn fitting<'a, B>(next: Cmd<'a, B>,
-                  bcmds: &Vec<Cmd<'a, B>>,
-                  fcmds: &mut Vec<Cmd<'a, B>>,
-                  mut rem: isize)
-                  -> bool
-    where B: Deref<Target = Doc<'a, B>>
+fn fitting<'a, B>(
+    next: Cmd<'a, B>,
+    bcmds: &Vec<Cmd<'a, B>>,
+    fcmds: &mut Vec<Cmd<'a, B>>,
+    mut rem: isize,
+) -> bool
+where
+    B: Deref<Target = Doc<'a, B>>,
 {
     let mut bidx = bcmds.len();
     fcmds.clear(); // clear from previous calls from best
@@ -105,16 +109,14 @@ fn fitting<'a, B>(next: Cmd<'a, B>,
                     &Nest(off, ref doc) => {
                         fcmds.push((ind + off, mode, doc));
                     }
-                    &Space => {
-                        match mode {
-                            Mode::Flat => {
-                                rem -= 1;
-                            }
-                            Mode::Break => {
-                                return true;
-                            }
+                    &Space => match mode {
+                        Mode::Flat => {
+                            rem -= 1;
                         }
-                    }
+                        Mode::Break => {
+                            return true;
+                        }
+                    },
                     &Newline => return true,
                     &Text(ref str) => {
                         rem -= str.len() as isize;
@@ -127,11 +129,13 @@ fn fitting<'a, B>(next: Cmd<'a, B>,
 }
 
 #[inline]
-pub fn best<'a, W: ?Sized + io::Write, B>(doc: &'a Doc<'a, B>,
-                                          width: usize,
-                                          out: &mut W)
-                                          -> io::Result<()>
-    where B: Deref<Target = Doc<'a, B>>
+pub fn best<'a, W: ?Sized + io::Write, B>(
+    doc: &'a Doc<'a, B>,
+    width: usize,
+    out: &mut W,
+) -> io::Result<()>
+where
+    B: Deref<Target = Doc<'a, B>>,
 {
     let mut pos = 0usize;
     let mut bcmds = vec![(0usize, Mode::Break, doc)];
@@ -148,22 +152,20 @@ pub fn best<'a, W: ?Sized + io::Write, B>(doc: &'a Doc<'a, B>,
                 }
                 bcmds.push((ind, mode, doc));
             }
-            &Group(ref doc) => {
-                match mode {
-                    Mode::Flat => {
-                        bcmds.push((ind, Mode::Flat, doc));
-                    }
-                    Mode::Break => {
-                        let next = (ind, Mode::Flat, &**doc);
-                        let rem = width as isize - pos as isize;
-                        if fitting(next, &bcmds, &mut fcmds, rem) {
-                            bcmds.push(next);
-                        } else {
-                            bcmds.push((ind, Mode::Break, doc));
-                        }
+            &Group(ref doc) => match mode {
+                Mode::Flat => {
+                    bcmds.push((ind, Mode::Flat, doc));
+                }
+                Mode::Break => {
+                    let next = (ind, Mode::Flat, &**doc);
+                    let rem = width as isize - pos as isize;
+                    if fitting(next, &bcmds, &mut fcmds, rem) {
+                        bcmds.push(next);
+                    } else {
+                        bcmds.push((ind, Mode::Break, doc));
                     }
                 }
-            }
+            },
             &Nest(off, ref doc) => {
                 bcmds.push((ind + off, mode, doc));
             }
