@@ -198,6 +198,7 @@ where
 /// The `DocAllocator` trait abstracts over a type which can allocate (pointers to) `Doc`.
 pub trait DocAllocator<'a> {
     type Doc: Deref<Target = doc::Doc<'a, Self::Doc>> + Clone;
+
     fn alloc(&'a self, doc::Doc<'a, Self::Doc>) -> Self::Doc;
 
     /// Allocate an empty document.
@@ -269,7 +270,6 @@ pub trait DocAllocator<'a> {
         result
     }
 }
-
 
 impl<'a, 's, A: ?Sized> DocBuilder<'a, A>
 where
@@ -471,7 +471,6 @@ impl<'a> Doc<'a, BoxDoc<'a>> {
     }
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -487,7 +486,6 @@ mod tests {
         }
     }
 
-
     #[test]
     fn box_doc_inference() {
         let doc = Doc::group(
@@ -495,6 +493,7 @@ mod tests {
                 .append(Doc::space())
                 .append(Doc::text("test")),
         );
+
         test!(doc, "test test");
     }
 
@@ -505,18 +504,16 @@ mod tests {
                 .append(Doc::newline())
                 .append(Doc::text("test")),
         );
+
         test!(doc, "test\ntest");
     }
 
     #[test]
     fn space_do_not_reset_pos() {
-        let doc = Doc::group(
-            Doc::text("test")
-                .append(Doc::space()))
-                .append(Doc::text("test"))
-                .append(Doc::group(Doc::space())
-                    .append(Doc::text("test")))
-        ;
+        let doc = Doc::group(Doc::text("test").append(Doc::space()))
+            .append(Doc::text("test"))
+            .append(Doc::group(Doc::space()).append(Doc::text("test")));
+
         test!(9, doc, "test test\ntest");
     }
 
@@ -524,11 +521,14 @@ mod tests {
     // a single line but instead breaks on the `Doc::space()` to fit with 6 columns
     #[test]
     fn newline_does_not_cause_next_line_to_be_to_long() {
-        let doc = Doc::group(Doc::text("test")
-            .append(Doc::newline())
-            .append(Doc::text("test")
-                .append(Doc::space())
-                .append(Doc::text("test"))));
+        let doc = Doc::group(
+            Doc::text("test").append(Doc::newline()).append(
+                Doc::text("test")
+                    .append(Doc::space())
+                    .append(Doc::text("test")),
+            ),
+        );
+
         test!(6, doc, "test\ntest\ntest");
     }
 
@@ -546,6 +546,7 @@ mod tests {
                 .append(Doc::space())
                 .append(Doc::text("}")),
         );
+
         test!(5, doc, "{\n  test\n  test\n}");
     }
 }
