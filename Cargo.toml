@@ -1,26 +1,16 @@
 [package]
-
 name = "pretty"
 version = "0.3.2"
 authors = [ "Jonathan Sterling <jon@jonmsterling.com>", "Darin Morrison <darinmorrison+git@gmail.com>" ]
 description = "Wadler-style pretty-printing combinators in Rust"
-documentation = "http://freebroccolo.github.io/pretty.rs/doc/pretty/"
+documentation = "https://docs.rs/pretty/"
 keywords = ["console", "functional", "pretty-printing"]
 license = "MIT"
 readme = "README.md"
 repository = "https://github.com/freebroccolo/pretty.rs"
 
-[lib]
-doc = true
-doctest = true
-name = "pretty"
-path = "src/pretty/lib.rs"
-
-[[bin]]
-doc  = false
+[[example]]
 name = "trees"
-path = "examples/trees.rs"
-
 
 [dependencies]
 typed-arena = "1.2.0"

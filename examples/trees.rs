@@ -94,11 +94,8 @@ pub fn main() {
     {
         print!("\nwriting to stdout directly:\n");
         let mut out = io::stdout();
-        example
-            .pretty(&allocator)
-            .1
-            .render(70, &mut out)
-    // try writing to memory
+        example.pretty(&allocator).1.render(70, &mut out)
+        // try writing to memory
     }.and_then(|()| {
         print!("\nwriting to string then printing:\n");
         let mut mem = Vec::new();
@@ -111,8 +108,7 @@ pub fn main() {
                 let res = str::from_utf8(&mem).unwrap_or(err_msg);
                 println!("{}", res)
             })
-    // print an error if anything failed
-    }).unwrap_or_else(|err| {
-        println!("error: {}", err)
-    });
+        // print an error if anything failed
+    })
+        .unwrap_or_else(|err| println!("error: {}", err));
 }

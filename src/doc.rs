@@ -4,7 +4,7 @@ use std::fmt;
 use std::io;
 use std::ops::Deref;
 
-pub use self::Doc::{Nil, Append, Space, Group, Nest, Newline, Text};
+pub use self::Doc::{Append, Group, Nest, Newline, Nil, Space, Text};
 
 #[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
 enum Mode {
@@ -39,11 +39,13 @@ where
 
 trait Render {
     type Error;
+
     fn write_str(&mut self, s: &str) -> Result<usize, Self::Error>;
     fn write_str_all(&mut self, s: &str) -> Result<(), Self::Error>;
 }
 
 struct IoWrite<W>(W);
+
 impl<W> Render for IoWrite<W>
 where
     W: io::Write,
@@ -53,12 +55,14 @@ where
     fn write_str(&mut self, s: &str) -> io::Result<usize> {
         self.0.write(s.as_bytes())
     }
+
     fn write_str_all(&mut self, s: &str) -> io::Result<()> {
         self.0.write_all(s.as_bytes())
     }
 }
 
 struct FmtWrite<W>(W);
+
 impl<W> Render for FmtWrite<W>
 where
     W: fmt::Write,
@@ -68,6 +72,7 @@ where
     fn write_str(&mut self, s: &str) -> Result<usize, fmt::Error> {
         self.write_str_all(s).map(|_| s.len())
     }
+
     fn write_str_all(&mut self, s: &str) -> fmt::Result {
         self.0.write_str(s)
     }
@@ -208,16 +213,14 @@ where
                     &Nest(off, ref doc) => {
                         fcmds.push((ind + off, mode, doc));
                     }
-                    &Space => {
-                        match mode {
-                            Mode::Flat => {
-                                rem -= 1;
-                            }
-                            Mode::Break => {
-                                return true;
-                            }
+                    &Space => match mode {
+                        Mode::Flat => {
+                            rem -= 1;
                         }
-                    }
+                        Mode::Break => {
+                            return true;
+                        }
+                    },
                     &Newline => return true,
                     &Text(ref str) => {
                         rem -= str.len() as isize;
@@ -250,36 +253,32 @@ where
                 }
                 bcmds.push((ind, mode, doc));
             }
-            &Group(ref doc) => {
-                match mode {
-                    Mode::Flat => {
-                        bcmds.push((ind, Mode::Flat, doc));
-                    }
-                    Mode::Break => {
-                        let next = (ind, Mode::Flat, &**doc);
-                        let rem = width as isize - pos as isize;
-                        if fitting(next, &bcmds, &mut fcmds, rem) {
-                            bcmds.push(next);
-                        } else {
-                            bcmds.push((ind, Mode::Break, doc));
-                        }
+            &Group(ref doc) => match mode {
+                Mode::Flat => {
+                    bcmds.push((ind, Mode::Flat, doc));
+                }
+                Mode::Break => {
+                    let next = (ind, Mode::Flat, &**doc);
+                    let rem = width as isize - pos as isize;
+                    if fitting(next, &bcmds, &mut fcmds, rem) {
+                        bcmds.push(next);
+                    } else {
+                        bcmds.push((ind, Mode::Break, doc));
                     }
                 }
-            }
+            },
             &Nest(off, ref doc) => {
                 bcmds.push((ind + off, mode, doc));
             }
-            &Space => {
-                match mode {
-                    Mode::Flat => {
-                        try!(write_spaces(1, out));
-                    }
-                    Mode::Break => {
-                        try!(write_newline(ind, out));
-                        pos = ind;
-                    }
+            &Space => match mode {
+                Mode::Flat => {
+                    try!(write_spaces(1, out));
                 }
-            }
+                Mode::Break => {
+                    try!(write_newline(ind, out));
+                    pos = ind;
+                }
+            },
             &Newline => {
                 try!(write_newline(ind, out));
                 pos = ind;
@@ -287,9 +286,12 @@ where
                 // Since this newline caused an early break we don't know if the remaining
                 // documents fit the next line so recalculate if they fit
                 fcmds.clear();
-                let docs =
-                    bcmds.len() -
-                    bcmds.iter().rev().position(|t| t.1 == Mode::Break).unwrap_or(bcmds.len());
+                let docs = bcmds.len()
+                    - bcmds
+                        .iter()
+                        .rev()
+                        .position(|t| t.1 == Mode::Break)
+                        .unwrap_or(bcmds.len());
                 fcmds.extend_from_slice(&bcmds[docs..]);
                 if let Some(next) = fcmds.pop() {
                     let rem = width as isize - pos as isize;
