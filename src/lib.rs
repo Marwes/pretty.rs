@@ -143,15 +143,101 @@
 
 extern crate typed_arena;
 
-use doc::Doc::{Append, Group, Nest, Newline, Nil, Space, Text};
 use std::borrow::Cow;
 use std::fmt;
+use std::io;
 use std::ops::Deref;
 
-mod doc;
+use Doc::{Append, Group, Nest, Newline, Nil, Space, Text};
+
+mod render;
+
+/// The concrete document type. This type is not meant to be used directly. Instead use the static
+/// functions on `Doc` or the methods on an `DocAllocator`.
+///
+/// The `B` parameter is used to abstract over pointers to `Doc`. See `RefDoc` and `BoxDoc` for how
+/// it is used
+#[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
+pub enum Doc<'a, B> {
+    Nil,
+    Append(B, B),
+    Group(B),
+    Nest(usize, B),
+    Space,
+    Newline,
+    Text(Cow<'a, str>),
+}
+
+impl<'a, B, S> From<S> for Doc<'a, B>
+where
+    S: Into<Cow<'a, str>>,
+{
+    fn from(s: S) -> Doc<'a, B> {
+        Doc::Text(s.into())
+    }
+}
+
+pub struct Pretty<'a, D>
+where
+    D: 'a,
+{
+    doc: &'a Doc<'a, D>,
+    width: usize,
+}
+
+impl<'a, D> fmt::Display for Pretty<'a, D>
+where
+    D: Deref<Target = Doc<'a, D>>,
+{
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        self.doc.render_fmt(self.width, f)
+    }
+}
+
+impl<'a, B> Doc<'a, B> {
+    /// Writes a rendered document to a `std::io::Write` object.
+    #[inline]
+    pub fn render<'b, W>(&'b self, width: usize, out: &mut W) -> io::Result<()>
+    where
+        B: Deref<Target = Doc<'b, B>>,
+        W: ?Sized + io::Write,
+    {
+        render::best(self, width, &mut render::IoWrite(out))
+    }
+
+    /// Writes a rendered document to a `std::fmt::Write` object.
+    #[inline]
+    pub fn render_fmt<'b, W>(&'b self, width: usize, out: &mut W) -> fmt::Result
+    where
+        B: Deref<Target = Doc<'b, B>>,
+        W: ?Sized + fmt::Write,
+    {
+        render::best(self, width, &mut render::FmtWrite(out))
+    }
+
+    /// Returns a value which implements `std::fmt::Display`
+    ///
+    /// ```
+    /// use pretty::Doc;
+    /// let doc = Doc::group(
+    ///     Doc::text("hello").append(Doc::space()).append(Doc::text("world"))
+    /// );
+    /// assert_eq!(format!("{}", doc.pretty(80)), "hello world");
+    /// ```
+    #[inline]
+    pub fn pretty<'b>(&'b self, width: usize) -> Pretty<'b, B>
+    where
+        B: Deref<Target = Doc<'b, B>>,
+    {
+        Pretty {
+            doc: self,
+            width: width,
+        }
+    }
+}
 
 #[derive(Clone, Eq, Ord, PartialEq, PartialOrd)]
-pub struct BoxDoc<'a>(Box<doc::Doc<'a, BoxDoc<'a>>>);
+pub struct BoxDoc<'a>(Box<Doc<'a, BoxDoc<'a>>>);
 
 impl<'a> fmt::Debug for BoxDoc<'a> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -160,13 +246,13 @@ impl<'a> fmt::Debug for BoxDoc<'a> {
 }
 
 impl<'a> BoxDoc<'a> {
-    fn new(doc: doc::Doc<'a, BoxDoc<'a>>) -> BoxDoc<'a> {
+    fn new(doc: Doc<'a, BoxDoc<'a>>) -> BoxDoc<'a> {
         BoxDoc(Box::new(doc))
     }
 }
 
 impl<'a> Deref for BoxDoc<'a> {
-    type Target = doc::Doc<'a, BoxDoc<'a>>;
+    type Target = Doc<'a, BoxDoc<'a>>;
 
     fn deref(&self) -> &Self::Target {
         &self.0
@@ -176,7 +262,7 @@ impl<'a> Deref for BoxDoc<'a> {
 /// The `DocBuilder` type allows for convenient appending of documents even for arena allocated
 /// documents by storing the arena inline.
 #[derive(Eq, Ord, PartialEq, PartialOrd)]
-pub struct DocBuilder<'a, A: ?Sized>(pub &'a A, pub doc::Doc<'a, A::Doc>)
+pub struct DocBuilder<'a, A: ?Sized>(pub &'a A, pub Doc<'a, A::Doc>)
 where
     A: DocAllocator<'a> + 'a;
 
@@ -186,20 +272,20 @@ impl<'a, A: DocAllocator<'a> + 'a> Clone for DocBuilder<'a, A> {
     }
 }
 
-impl<'a, A: ?Sized> Into<doc::Doc<'a, A::Doc>> for DocBuilder<'a, A>
+impl<'a, A: ?Sized> Into<Doc<'a, A::Doc>> for DocBuilder<'a, A>
 where
     A: DocAllocator<'a>,
 {
-    fn into(self) -> doc::Doc<'a, A::Doc> {
+    fn into(self) -> Doc<'a, A::Doc> {
         self.1
     }
 }
 
 /// The `DocAllocator` trait abstracts over a type which can allocate (pointers to) `Doc`.
 pub trait DocAllocator<'a> {
-    type Doc: Deref<Target = doc::Doc<'a, Self::Doc>> + Clone;
+    type Doc: Deref<Target = Doc<'a, Self::Doc>> + Clone;
 
-    fn alloc(&'a self, doc::Doc<'a, Self::Doc>) -> Self::Doc;
+    fn alloc(&'a self, Doc<'a, Self::Doc>) -> Self::Doc;
 
     /// Allocate an empty document.
     #[inline]
@@ -242,7 +328,7 @@ pub trait DocAllocator<'a> {
     fn concat<I>(&'a self, docs: I) -> DocBuilder<'a, Self>
     where
         I: IntoIterator,
-        I::Item: Into<doc::Doc<'a, Self::Doc>>,
+        I::Item: Into<Doc<'a, Self::Doc>>,
     {
         docs.into_iter().fold(self.nil(), |a, b| a.append(b))
     }
@@ -255,8 +341,8 @@ pub trait DocAllocator<'a> {
     fn intersperse<I, S>(&'a self, docs: I, separator: S) -> DocBuilder<'a, Self>
     where
         I: IntoIterator,
-        I::Item: Into<doc::Doc<'a, Self::Doc>>,
-        S: Into<doc::Doc<'a, Self::Doc>> + Clone,
+        I::Item: Into<Doc<'a, Self::Doc>>,
+        S: Into<Doc<'a, Self::Doc>> + Clone,
     {
         let mut result = self.nil();
         let mut iter = docs.into_iter();
@@ -279,7 +365,7 @@ where
     #[inline]
     pub fn append<B>(self, that: B) -> DocBuilder<'a, A>
     where
-        B: Into<doc::Doc<'a, A::Doc>>,
+        B: Into<Doc<'a, A::Doc>>,
     {
         let DocBuilder(allocator, this) = self;
         let that = that.into();
@@ -314,9 +400,9 @@ where
     }
 }
 
-/// Newtype wrapper for `&doc::Doc`
+/// Newtype wrapper for `&Doc`
 #[derive(Clone, Eq, Ord, PartialEq, PartialOrd)]
-pub struct RefDoc<'a>(&'a doc::Doc<'a, RefDoc<'a>>);
+pub struct RefDoc<'a>(&'a Doc<'a, RefDoc<'a>>);
 
 impl<'a> fmt::Debug for RefDoc<'a> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -325,15 +411,15 @@ impl<'a> fmt::Debug for RefDoc<'a> {
 }
 
 impl<'a> Deref for RefDoc<'a> {
-    type Target = doc::Doc<'a, RefDoc<'a>>;
+    type Target = Doc<'a, RefDoc<'a>>;
 
-    fn deref(&self) -> &doc::Doc<'a, RefDoc<'a>> {
+    fn deref(&self) -> &Doc<'a, RefDoc<'a>> {
         &self.0
     }
 }
 
 /// An arena which can be used to allocate `Doc` values.
-pub type Arena<'a> = typed_arena::Arena<doc::Doc<'a, RefDoc<'a>>>;
+pub type Arena<'a> = typed_arena::Arena<Doc<'a, RefDoc<'a>>>;
 
 impl<'a, A> DocAllocator<'a> for &'a A
 where
@@ -342,7 +428,7 @@ where
     type Doc = A::Doc;
 
     #[inline]
-    fn alloc(&'a self, doc: doc::Doc<'a, Self::Doc>) -> Self::Doc {
+    fn alloc(&'a self, doc: Doc<'a, Self::Doc>) -> Self::Doc {
         (**self).alloc(doc)
     }
 }
@@ -351,9 +437,9 @@ impl<'a> DocAllocator<'a> for Arena<'a> {
     type Doc = RefDoc<'a>;
 
     #[inline]
-    fn alloc(&'a self, doc: doc::Doc<'a, Self::Doc>) -> Self::Doc {
-        static SPACE: doc::Doc<'static, RefDoc<'static>> = Doc::Space;
-        static NEWLINE: doc::Doc<'static, RefDoc<'static>> = Doc::Newline;
+    fn alloc(&'a self, doc: Doc<'a, Self::Doc>) -> Self::Doc {
+        static SPACE: Doc<'static, RefDoc<'static>> = Doc::Space;
+        static NEWLINE: Doc<'static, RefDoc<'static>> = Doc::Newline;
 
         RefDoc(match doc {
             Space => &SPACE,
@@ -371,12 +457,10 @@ impl<'a> DocAllocator<'a> for BoxAllocator {
     type Doc = BoxDoc<'a>;
 
     #[inline]
-    fn alloc(&'a self, doc: doc::Doc<'a, Self::Doc>) -> Self::Doc {
+    fn alloc(&'a self, doc: Doc<'a, Self::Doc>) -> Self::Doc {
         BoxDoc::new(doc)
     }
 }
-
-pub use doc::Doc;
 
 impl<'a, B> Doc<'a, B> {
     /// An empty document.
