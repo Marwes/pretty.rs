@@ -148,8 +148,6 @@ use std::fmt;
 use std::io;
 use std::ops::Deref;
 
-use Doc::{Append, Group, Nest, Newline, Nil, Space, Text};
-
 mod render;
 
 /// The concrete document type. This type is not meant to be used directly. Instead use the static
@@ -290,19 +288,19 @@ pub trait DocAllocator<'a> {
     /// Allocate an empty document.
     #[inline]
     fn nil(&'a self) -> DocBuilder<'a, Self> {
-        DocBuilder(self, Nil)
+        DocBuilder(self, Doc::Nil)
     }
 
     /// Allocate a single newline.
     #[inline]
     fn newline(&'a self) -> DocBuilder<'a, Self> {
-        DocBuilder(self, Newline)
+        DocBuilder(self, Doc::Newline)
     }
 
     /// Allocate a single space.
     #[inline]
     fn space(&'a self) -> DocBuilder<'a, Self> {
-        DocBuilder(self, Space)
+        DocBuilder(self, Doc::Space)
     }
 
     /// Allocate a document containing the text `t.to_string()`.
@@ -320,7 +318,7 @@ pub trait DocAllocator<'a> {
     fn text<T: Into<Cow<'a, str>>>(&'a self, data: T) -> DocBuilder<'a, Self> {
         let text = data.into();
         debug_assert!(!text.contains(|c: char| c == '\n' || c == '\r'));
-        DocBuilder(self, Text(text))
+        DocBuilder(self, Doc::Text(text))
     }
 
     /// Allocate a document concatenating the given documents.
@@ -370,9 +368,9 @@ where
         let DocBuilder(allocator, this) = self;
         let that = that.into();
         let doc = match (this, that) {
-            (Nil, that) => that,
-            (this, Nil) => this,
-            (this, that) => Append(allocator.alloc(this), allocator.alloc(that)),
+            (Doc::Nil, that) => that,
+            (this, Doc::Nil) => this,
+            (this, that) => Doc::Append(allocator.alloc(this), allocator.alloc(that)),
         };
         DocBuilder(allocator, doc)
     }
@@ -386,7 +384,7 @@ where
     #[inline]
     pub fn group(self) -> DocBuilder<'a, A> {
         let DocBuilder(allocator, this) = self;
-        DocBuilder(allocator, Group(allocator.alloc(this)))
+        DocBuilder(allocator, Doc::Group(allocator.alloc(this)))
     }
 
     /// Increase the indentation level of this document.
@@ -396,7 +394,7 @@ where
             return self;
         }
         let DocBuilder(allocator, this) = self;
-        DocBuilder(allocator, Nest(offset, allocator.alloc(this)))
+        DocBuilder(allocator, Doc::Nest(offset, allocator.alloc(this)))
     }
 }
 
@@ -442,8 +440,8 @@ impl<'a> DocAllocator<'a> for Arena<'a> {
         static NEWLINE: Doc<'static, RefDoc<'static>> = Doc::Newline;
 
         RefDoc(match doc {
-            Space => &SPACE,
-            Newline => &NEWLINE,
+            Doc::Space => &SPACE,
+            Doc::Newline => &NEWLINE,
             _ => Arena::alloc(self, doc),
         })
     }
@@ -466,7 +464,7 @@ impl<'a, B> Doc<'a, B> {
     /// An empty document.
     #[inline]
     pub fn nil() -> Doc<'a, B> {
-        Nil
+        Doc::Nil
     }
 
     /// The text `t.to_string()`.
@@ -480,7 +478,7 @@ impl<'a, B> Doc<'a, B> {
     /// A single newline.
     #[inline]
     pub fn newline() -> Doc<'a, B> {
-        Newline
+        Doc::Newline
     }
 
     /// The given text, which must not contain line breaks.
@@ -488,13 +486,13 @@ impl<'a, B> Doc<'a, B> {
     pub fn text<T: Into<Cow<'a, str>>>(data: T) -> Doc<'a, B> {
         let text = data.into();
         debug_assert!(!text.contains(|c: char| c == '\n' || c == '\r'));
-        Text(text)
+        Doc::Text(text)
     }
 
     /// A space.
     #[inline]
     pub fn space() -> Doc<'a, B> {
-        Space
+        Doc::Space
     }
 }
 
