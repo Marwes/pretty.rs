@@ -9,11 +9,9 @@ license = "MIT"
 readme = "README.md"
 repository = "https://github.com/freebroccolo/pretty.rs"
 
-[[example]]
-name = "trees"
-
 [dependencies]
 typed-arena = "1.2.0"
+termcolor = "0.3"
 
 [dev-dependencies]
 tempfile = "2.1.4"

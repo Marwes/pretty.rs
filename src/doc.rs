@@ -4,6 +4,8 @@ use std::fmt;
 use std::io;
 use std::ops::Deref;
 
+use termcolor::{ColorSpec, WriteColor};
+
 pub use self::Doc::{Annotated, Append, Group, Nest, Newline, Nil, Space, Text};
 
 #[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
@@ -108,6 +110,43 @@ where
     }
 }
 
+struct TermColored<W> {
+    color_stack: Vec<ColorSpec>,
+    writer: W,
+}
+
+impl<W> Render for TermColored<W>
+where
+    W: io::Write,
+{
+    type Error = io::Error;
+
+    fn write_str(&mut self, s: &str) -> io::Result<usize> {
+        self.writer.write(s.as_bytes())
+    }
+
+    fn write_str_all(&mut self, s: &str) -> io::Result<()> {
+        self.writer.write_all(s.as_bytes())
+    }
+}
+
+impl<W> RenderAnnotated<ColorSpec> for TermColored<W>
+where
+    W: WriteColor,
+{
+    fn push_annotation(&mut self, color: &ColorSpec) -> Result<(), Self::Error> {
+        self.color_stack.push(color.clone());
+        self.writer.set_color(color)
+    }
+    fn pop_annotation(&mut self) -> Result<(), Self::Error> {
+        self.color_stack.pop();
+        match self.color_stack.last() {
+            Some(previous) => self.writer.set_color(previous),
+            None => self.writer.reset(),
+        }
+    }
+}
+
 pub struct Pretty<'a, A, D>
 where
     A: 'a,
@@ -165,6 +204,24 @@ impl<'a, A, B> Doc<'a, A, B> {
             doc: self,
             width: width,
         }
+    }
+}
+
+impl<'a, B> Doc<'a, ColorSpec, B> {
+    #[inline]
+    pub fn render_colored<'b, W>(&'b self, width: usize, out: W) -> io::Result<()>
+    where
+        B: Deref<Target = Doc<'b, ColorSpec, B>>,
+        W: WriteColor,
+    {
+        best(
+            self,
+            width,
+            &mut TermColored {
+                color_stack: Vec::new(),
+                writer: out,
+            },
+        )
     }
 }
 

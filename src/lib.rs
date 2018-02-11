@@ -141,6 +141,7 @@
 //! [examples/trees.rs](https://github.com/freebroccolo/pretty.rs/blob/master/examples/trees.rs#L39)
 //! for this approach.
 
+pub extern crate termcolor;
 extern crate typed_arena;
 
 use doc::Doc::{Annotated, Append, Group, Nest, Newline, Nil, Space, Text};
