@@ -60,38 +60,6 @@
 //! # fn main() { }
 //! ```
 //!
-//! Next, we convert the [Doc](enum.Doc.html) to a plain old string.
-//!
-//! ```rust
-//! # extern crate pretty;
-//! # use pretty::*;
-//! # enum SExp {
-//! #     Atom(u32),
-//! #     List(Vec<SExp>),
-//! # }
-//! # use SExp::*;
-//! # impl SExp {
-//! #     /// Return a pretty printed format of self.
-//! #     pub fn to_doc(&self) -> Doc<BoxDoc> {
-//! #         match self {
-//! #             &Atom(x) => Doc::as_string(x),
-//! #             &List(ref xs) =>
-//! #                 Doc::text("(")
-//! #                     .append(Doc::intersperse(xs.into_iter().map(|x| x.to_doc()), Doc::space()).nest(1).group())
-//! #                     .append(Doc::text(")"))
-//! #         }
-//! #     }
-//! # }
-//! impl SExp {
-//!     pub fn to_pretty(&self, width: usize) -> String {
-//!         let mut w = Vec::new();
-//!         self.to_doc().render(width, &mut w).unwrap();
-//!         String::from_utf8(w).unwrap()
-//!     }
-//! }
-//! # fn main() { }
-//! ```
-//!
 //! And finally we can test that the nesting and grouping behaves as we expected.
 //!
 //! ```rust
@@ -114,22 +82,12 @@
 //! #         }
 //! #     }
 //! # }
-//! # impl SExp {
-//! #     pub fn to_pretty(&self, width: usize) -> String {
-//! #         let mut w = Vec::new();
-//! #         self.to_doc().render(width, &mut w).unwrap();
-//! #         String::from_utf8(w).unwrap()
-//! #     }
-//! # }
 //! # fn main() {
 //! let atom = SExp::Atom(5);
-//! assert_eq!("5", atom.to_pretty(10));
+//! assert_eq!("5", format!("{:10}", atom.to_doc().pretty()));
 //! let list = SExp::List(vec![SExp::Atom(1), SExp::Atom(2), SExp::Atom(3)]);
-//! assert_eq!("(1 2 3)", list.to_pretty(10));
-//! assert_eq!("\
-//!(1
-//! 2
-//! 3)", list.to_pretty(5));
+//! assert_eq!("(1 2 3)", format!("{:10}", list.to_doc().pretty()));
+//! assert_eq!("(1\n 2\n 3)", format!("{:5}", list.to_doc().pretty()));
 //! # }
 //! ```
 //!
@@ -175,42 +133,36 @@ where
     }
 }
 
-pub struct Pretty<'a, D>
-where
-    D: 'a,
-{
+pub struct Pretty<'a, D: 'a> {
     doc: &'a Doc<'a, D>,
-    width: usize,
 }
 
-impl<'a, D> fmt::Display for Pretty<'a, D>
-where
-    D: Deref<Target = Doc<'a, D>>,
-{
+impl<'a, D: Deref<Target = Doc<'a, D>>> fmt::Display for Pretty<'a, D> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        self.doc.render_fmt(self.width, f)
+        self.doc.render_fmt(f)
     }
 }
 
-impl<'a, B> Doc<'a, B> {
+impl<'a, B: Deref<Target = Doc<'a, B>>> Doc<'a, B> {
     /// Writes a rendered document to a `std::io::Write` object.
     #[inline]
-    pub fn render<'b, W>(&'b self, width: usize, out: &mut W) -> io::Result<()>
+    pub fn render<W>(&'a self, width: usize, out: &mut W) -> io::Result<()>
     where
-        B: Deref<Target = Doc<'b, B>>,
         W: ?Sized + io::Write,
     {
         render::best(self, width, &mut render::IoWrite(out))
     }
 
     /// Writes a rendered document to a `std::fmt::Write` object.
+    ///
+    /// This uses the `fmt::Formatter::width` setting to control the pretty
+    /// printing width, defaulting to `std::usize::MAX` if it is not set.
     #[inline]
-    pub fn render_fmt<'b, W>(&'b self, width: usize, out: &mut W) -> fmt::Result
-    where
-        B: Deref<Target = Doc<'b, B>>,
-        W: ?Sized + fmt::Write,
-    {
-        render::best(self, width, &mut render::FmtWrite(out))
+    pub fn render_fmt(&'a self, f: &mut fmt::Formatter) -> fmt::Result {
+        use std::usize;
+
+        let width = f.width().unwrap_or(usize::MAX);
+        render::best(self, width, &mut render::FmtWrite(f))
     }
 
     /// Returns a value which implements `std::fmt::Display`
@@ -220,16 +172,14 @@ impl<'a, B> Doc<'a, B> {
     /// let doc = Doc::group(
     ///     Doc::text("hello").append(Doc::space()).append(Doc::text("world"))
     /// );
-    /// assert_eq!(format!("{}", doc.pretty(80)), "hello world");
+    /// assert_eq!(format!("{}", doc.pretty()), "hello world");
+    /// assert_eq!(format!("{:80}", doc.pretty()), "hello world");
+    /// assert_eq!(format!("{expr:width$}", expr = doc.pretty(), width = 80), "hello world");
     /// ```
     #[inline]
-    pub fn pretty<'b>(&'b self, width: usize) -> Pretty<'b, B>
-    where
-        B: Deref<Target = Doc<'b, B>>,
-    {
+    pub fn pretty(&'a self) -> Pretty<'a, B> {
         Pretty {
             doc: self,
-            width: width,
         }
     }
 }
@@ -559,9 +509,7 @@ mod tests {
 
     macro_rules! test {
         ($size: expr, $actual: expr, $expected: expr) => {
-            let mut s = String::new();
-            $actual.render_fmt($size, &mut s).unwrap();
-            assert_eq!(s, $expected);
+            assert_eq!(format!("{term:width$}", term = $actual.pretty(), width = $size), $expected);
         };
         ($actual: expr, $expected: expr) => {
             test!(70, $actual, $expected)
