@@ -88,27 +88,5 @@ pub fn main() {
     ];
     let example = Tree::node_with_forest("aaaa", &aaas);
 
-    let err_msg = "<buffer is not a utf-8 encoded string>";
-
-    // try writing to stdout
-    {
-        print!("\nwriting to stdout directly:\n");
-        let mut out = io::stdout();
-        example.pretty(&allocator).1.render(70, &mut out)
-        // try writing to memory
-    }.and_then(|()| {
-        print!("\nwriting to string then printing:\n");
-        let mut mem = Vec::new();
-        example
-            .pretty(&allocator)
-            .1
-            .render(70, &mut mem)
-            // print to console from memory
-            .map(|()| {
-                let res = str::from_utf8(&mem).unwrap_or(err_msg);
-                println!("{}", res)
-            })
-        // print an error if anything failed
-    })
-        .unwrap_or_else(|err| println!("error: {}", err));
+    println!("{:70}", example.pretty(&allocator).1.pretty());
 }

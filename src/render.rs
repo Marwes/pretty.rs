@@ -1,50 +1,18 @@
-use std::borrow::Cow;
 use std::cmp;
 use std::fmt;
 use std::io;
 use std::ops::Deref;
 
-pub use self::Doc::{Append, Group, Nest, Newline, Nil, Space, Text};
+pub use Doc;
 
-#[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
-enum Mode {
-    Break,
-    Flat,
-}
-
-/// The concrete document type. This type is not meant to be used directly. Instead use the static
-/// functions on `Doc` or the methods on an `DocAllocator`.
-///
-/// The `B` parameter is used to abstract over pointers to `Doc`. See `RefDoc` and `BoxDoc` for how
-/// it is used
-#[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
-pub enum Doc<'a, B> {
-    Nil,
-    Append(B, B),
-    Group(B),
-    Nest(usize, B),
-    Space,
-    Newline,
-    Text(Cow<'a, str>),
-}
-
-impl<'a, B, S> From<S> for Doc<'a, B>
-where
-    S: Into<Cow<'a, str>>,
-{
-    fn from(s: S) -> Doc<'a, B> {
-        Doc::Text(s.into())
-    }
-}
-
-trait Render {
+pub trait Render {
     type Error;
 
     fn write_str(&mut self, s: &str) -> Result<usize, Self::Error>;
     fn write_str_all(&mut self, s: &str) -> Result<(), Self::Error>;
 }
 
-struct IoWrite<W>(W);
+pub struct IoWrite<W>(pub W);
 
 impl<W> Render for IoWrite<W>
 where
@@ -61,7 +29,7 @@ where
     }
 }
 
-struct FmtWrite<W>(W);
+pub struct FmtWrite<W>(pub W);
 
 impl<W> Render for FmtWrite<W>
 where
@@ -78,63 +46,10 @@ where
     }
 }
 
-pub struct Pretty<'a, D>
-where
-    D: 'a,
-{
-    doc: &'a Doc<'a, D>,
-    width: usize,
-}
-
-impl<'a, D> fmt::Display for Pretty<'a, D>
-where
-    D: Deref<Target = Doc<'a, D>>,
-{
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        self.doc.render_fmt(self.width, f)
-    }
-}
-
-impl<'a, B> Doc<'a, B> {
-    /// Writes a rendered document to a `std::io::Write` object.
-    #[inline]
-    pub fn render<'b, W>(&'b self, width: usize, out: &mut W) -> io::Result<()>
-    where
-        B: Deref<Target = Doc<'b, B>>,
-        W: ?Sized + io::Write,
-    {
-        best(self, width, &mut IoWrite(out))
-    }
-
-    /// Writes a rendered document to a `std::fmt::Write` object.
-    #[inline]
-    pub fn render_fmt<'b, W>(&'b self, width: usize, out: &mut W) -> fmt::Result
-    where
-        B: Deref<Target = Doc<'b, B>>,
-        W: ?Sized + fmt::Write,
-    {
-        best(self, width, &mut FmtWrite(out))
-    }
-
-    /// Returns a value which implements `std::fmt::Display`
-    ///
-    /// ```
-    /// use pretty::Doc;
-    /// let doc = Doc::group(
-    ///     Doc::text("hello").append(Doc::space()).append(Doc::text("world"))
-    /// );
-    /// assert_eq!(format!("{}", doc.pretty(80)), "hello world");
-    /// ```
-    #[inline]
-    pub fn pretty<'b>(&'b self, width: usize) -> Pretty<'b, B>
-    where
-        B: Deref<Target = Doc<'b, B>>,
-    {
-        Pretty {
-            doc: self,
-            width: width,
-        }
-    }
+#[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
+enum Mode {
+    Break,
+    Flat,
 }
 
 type Cmd<'a, B> = (usize, Mode, &'a Doc<'a, B>);
@@ -194,26 +109,26 @@ where
             }
             Some((ind, mode, doc)) => {
                 match doc {
-                    &Nil => {}
-                    &Append(ref ldoc, ref rdoc) => {
+                    &Doc::Nil => {}
+                    &Doc::Append(ref ldoc, ref rdoc) => {
                         fcmds.push((ind, mode, rdoc));
                         // Since appended documents often appear in sequence on the left side we
                         // gain a slight performance increase by batching these pushes (avoiding
                         // to push and directly pop `Append` documents)
                         let mut doc = ldoc;
-                        while let Append(ref l, ref r) = **doc {
+                        while let Doc::Append(ref l, ref r) = **doc {
                             fcmds.push((ind, mode, r));
                             doc = l;
                         }
                         fcmds.push((ind, mode, doc));
                     }
-                    &Group(ref doc) => {
+                    &Doc::Group(ref doc) => {
                         fcmds.push((ind, mode, doc));
                     }
-                    &Nest(off, ref doc) => {
+                    &Doc::Nest(off, ref doc) => {
                         fcmds.push((ind + off, mode, doc));
                     }
-                    &Space => match mode {
+                    &Doc::Space => match mode {
                         Mode::Flat => {
                             rem -= 1;
                         }
@@ -221,8 +136,8 @@ where
                             return true;
                         }
                     },
-                    &Newline => return true,
-                    &Text(ref str) => {
+                    &Doc::Newline => return true,
+                    &Doc::Text(ref str) => {
                         rem -= str.len() as isize;
                     }
                 }
@@ -233,7 +148,7 @@ where
 }
 
 #[inline]
-fn best<'a, W, B>(doc: &'a Doc<'a, B>, width: usize, out: &mut W) -> Result<(), W::Error>
+pub fn best<'a, W, B>(doc: &'a Doc<'a, B>, width: usize, out: &mut W) -> Result<(), W::Error>
 where
     B: Deref<Target = Doc<'a, B>>,
     W: ?Sized + Render,
@@ -243,17 +158,17 @@ where
     let mut fcmds = vec![];
     while let Some((ind, mode, doc)) = bcmds.pop() {
         match doc {
-            &Nil => {}
-            &Append(ref ldoc, ref rdoc) => {
+            &Doc::Nil => {}
+            &Doc::Append(ref ldoc, ref rdoc) => {
                 bcmds.push((ind, mode, rdoc));
                 let mut doc = ldoc;
-                while let Append(ref l, ref r) = **doc {
+                while let Doc::Append(ref l, ref r) = **doc {
                     bcmds.push((ind, mode, r));
                     doc = l;
                 }
                 bcmds.push((ind, mode, doc));
             }
-            &Group(ref doc) => match mode {
+            &Doc::Group(ref doc) => match mode {
                 Mode::Flat => {
                     bcmds.push((ind, Mode::Flat, doc));
                 }
@@ -267,10 +182,10 @@ where
                     }
                 }
             },
-            &Nest(off, ref doc) => {
+            &Doc::Nest(off, ref doc) => {
                 bcmds.push((ind + off, mode, doc));
             }
-            &Space => match mode {
+            &Doc::Space => match mode {
                 Mode::Flat => {
                     try!(write_spaces(1, out));
                 }
@@ -279,7 +194,7 @@ where
                     pos = ind;
                 }
             },
-            &Newline => {
+            &Doc::Newline => {
                 try!(write_newline(ind, out));
                 pos = ind;
 
@@ -302,7 +217,7 @@ where
                     }
                 }
             }
-            &Text(ref s) => {
+            &Doc::Text(ref s) => {
                 try!(out.write_str_all(s));
                 pos += s.len();
             }
