@@ -47,7 +47,7 @@
 //! # use SExp::*;
 //! impl SExp {
 //!     /// Return a pretty printed format of self.
-//!     pub fn to_doc(&self) -> Doc<BoxDoc> {
+//!     pub fn to_doc(&self) -> Doc<(), BoxDoc<()>> {
 //!         match self {
 //!             &Atom(x) => Doc::as_string(x),
 //!             &List(ref xs) =>
@@ -72,7 +72,7 @@
 //! # use SExp::*;
 //! # impl SExp {
 //! #     /// Return a pretty printed format of self.
-//! #     pub fn to_doc(&self) -> Doc<BoxDoc> {
+//! #     pub fn to_doc(&self) -> Doc<(), BoxDoc<()>> {
 //! #         match self {
 //! #             &Atom(x) => Doc::as_string(x),
 //! #             &List(ref xs) =>
@@ -104,7 +104,7 @@
 //! # use SExp::*;
 //! # impl SExp {
 //! #     /// Return a pretty printed format of self.
-//! #     pub fn to_doc(&self) -> Doc<BoxDoc> {
+//! #     pub fn to_doc(&self) -> Doc<(), BoxDoc<()>> {
 //! #         match self {
 //! #             &Atom(x) => Doc::as_string(x),
 //! #             &List(ref xs) =>
@@ -141,9 +141,11 @@
 //! [examples/trees.rs](https://github.com/freebroccolo/pretty.rs/blob/master/examples/trees.rs#L39)
 //! for this approach.
 
+#[cfg(feature = "termcolor")]
+pub extern crate termcolor;
 extern crate typed_arena;
 
-use doc::Doc::{Append, Group, Nest, Newline, Nil, Space, Text};
+use doc::Doc::{Annotated, Append, Group, Nest, Newline, Nil, Space, Text};
 use std::borrow::Cow;
 use std::fmt;
 use std::ops::Deref;
@@ -151,22 +153,25 @@ use std::ops::Deref;
 mod doc;
 
 #[derive(Clone, Eq, Ord, PartialEq, PartialOrd)]
-pub struct BoxDoc<'a>(Box<doc::Doc<'a, BoxDoc<'a>>>);
+pub struct BoxDoc<'a, A>(Box<doc::Doc<'a, A, BoxDoc<'a, A>>>);
 
-impl<'a> fmt::Debug for BoxDoc<'a> {
+impl<'a, A> fmt::Debug for BoxDoc<'a, A>
+where
+    A: fmt::Debug,
+{
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         self.0.fmt(f)
     }
 }
 
-impl<'a> BoxDoc<'a> {
-    fn new(doc: doc::Doc<'a, BoxDoc<'a>>) -> BoxDoc<'a> {
+impl<'a, A> BoxDoc<'a, A> {
+    fn new(doc: doc::Doc<'a, A, BoxDoc<'a, A>>) -> BoxDoc<'a, A> {
         BoxDoc(Box::new(doc))
     }
 }
 
-impl<'a> Deref for BoxDoc<'a> {
-    type Target = doc::Doc<'a, BoxDoc<'a>>;
+impl<'a, A> Deref for BoxDoc<'a, A> {
+    type Target = doc::Doc<'a, A, BoxDoc<'a, A>>;
 
     fn deref(&self) -> &Self::Target {
         &self.0
@@ -176,46 +181,50 @@ impl<'a> Deref for BoxDoc<'a> {
 /// The `DocBuilder` type allows for convenient appending of documents even for arena allocated
 /// documents by storing the arena inline.
 #[derive(Eq, Ord, PartialEq, PartialOrd)]
-pub struct DocBuilder<'a, A: ?Sized>(pub &'a A, pub doc::Doc<'a, A::Doc>)
+pub struct DocBuilder<'a, A, D: ?Sized>(pub &'a D, pub doc::Doc<'a, A, D::Doc>)
 where
-    A: DocAllocator<'a> + 'a;
+    D: DocAllocator<'a, A> + 'a;
 
-impl<'a, A: DocAllocator<'a> + 'a> Clone for DocBuilder<'a, A> {
+impl<'a, A, D: DocAllocator<'a, A> + 'a> Clone for DocBuilder<'a, A, D>
+where
+    A: Clone,
+    D::Doc: Clone,
+{
     fn clone(&self) -> Self {
         DocBuilder(self.0, self.1.clone())
     }
 }
 
-impl<'a, A: ?Sized> Into<doc::Doc<'a, A::Doc>> for DocBuilder<'a, A>
+impl<'a, A, D: ?Sized> Into<doc::Doc<'a, A, D::Doc>> for DocBuilder<'a, A, D>
 where
-    A: DocAllocator<'a>,
+    D: DocAllocator<'a, A>,
 {
-    fn into(self) -> doc::Doc<'a, A::Doc> {
+    fn into(self) -> doc::Doc<'a, A, D::Doc> {
         self.1
     }
 }
 
 /// The `DocAllocator` trait abstracts over a type which can allocate (pointers to) `Doc`.
-pub trait DocAllocator<'a> {
-    type Doc: Deref<Target = doc::Doc<'a, Self::Doc>> + Clone;
+pub trait DocAllocator<'a, A> {
+    type Doc: Deref<Target = doc::Doc<'a, A, Self::Doc>>;
 
-    fn alloc(&'a self, doc::Doc<'a, Self::Doc>) -> Self::Doc;
+    fn alloc(&'a self, doc::Doc<'a, A, Self::Doc>) -> Self::Doc;
 
     /// Allocate an empty document.
     #[inline]
-    fn nil(&'a self) -> DocBuilder<'a, Self> {
+    fn nil(&'a self) -> DocBuilder<'a, A, Self> {
         DocBuilder(self, Nil)
     }
 
     /// Allocate a single newline.
     #[inline]
-    fn newline(&'a self) -> DocBuilder<'a, Self> {
+    fn newline(&'a self) -> DocBuilder<'a, A, Self> {
         DocBuilder(self, Newline)
     }
 
     /// Allocate a single space.
     #[inline]
-    fn space(&'a self) -> DocBuilder<'a, Self> {
+    fn space(&'a self) -> DocBuilder<'a, A, Self> {
         DocBuilder(self, Space)
     }
 
@@ -223,7 +232,7 @@ pub trait DocAllocator<'a> {
     ///
     /// The given text must not contain line breaks.
     #[inline]
-    fn as_string<T: ToString>(&'a self, t: T) -> DocBuilder<'a, Self> {
+    fn as_string<T: ToString>(&'a self, t: T) -> DocBuilder<'a, A, Self> {
         self.text(t.to_string())
     }
 
@@ -231,7 +240,7 @@ pub trait DocAllocator<'a> {
     ///
     /// The given text must not contain line breaks.
     #[inline]
-    fn text<T: Into<Cow<'a, str>>>(&'a self, data: T) -> DocBuilder<'a, Self> {
+    fn text<T: Into<Cow<'a, str>>>(&'a self, data: T) -> DocBuilder<'a, A, Self> {
         let text = data.into();
         debug_assert!(!text.contains(|c: char| c == '\n' || c == '\r'));
         DocBuilder(self, Text(text))
@@ -239,10 +248,10 @@ pub trait DocAllocator<'a> {
 
     /// Allocate a document concatenating the given documents.
     #[inline]
-    fn concat<I>(&'a self, docs: I) -> DocBuilder<'a, Self>
+    fn concat<I>(&'a self, docs: I) -> DocBuilder<'a, A, Self>
     where
         I: IntoIterator,
-        I::Item: Into<doc::Doc<'a, Self::Doc>>,
+        I::Item: Into<doc::Doc<'a, A, Self::Doc>>,
     {
         docs.into_iter().fold(self.nil(), |a, b| a.append(b))
     }
@@ -252,11 +261,11 @@ pub trait DocAllocator<'a> {
     ///
     /// Compare [the `intersperse` method from the `itertools` crate](https://docs.rs/itertools/0.5.9/itertools/trait.Itertools.html#method.intersperse).
     #[inline]
-    fn intersperse<I, S>(&'a self, docs: I, separator: S) -> DocBuilder<'a, Self>
+    fn intersperse<I, S>(&'a self, docs: I, separator: S) -> DocBuilder<'a, A, Self>
     where
         I: IntoIterator,
-        I::Item: Into<doc::Doc<'a, Self::Doc>>,
-        S: Into<doc::Doc<'a, Self::Doc>> + Clone,
+        I::Item: Into<doc::Doc<'a, A, Self::Doc>>,
+        S: Into<doc::Doc<'a, A, Self::Doc>> + Clone,
     {
         let mut result = self.nil();
         let mut iter = docs.into_iter();
@@ -271,15 +280,15 @@ pub trait DocAllocator<'a> {
     }
 }
 
-impl<'a, 's, A: ?Sized> DocBuilder<'a, A>
+impl<'a, 's, A, D: ?Sized> DocBuilder<'a, A, D>
 where
-    A: DocAllocator<'a>,
+    D: DocAllocator<'a, A>,
 {
     /// Append the given document after this document.
     #[inline]
-    pub fn append<B>(self, that: B) -> DocBuilder<'a, A>
+    pub fn append<B>(self, that: B) -> DocBuilder<'a, A, D>
     where
-        B: Into<doc::Doc<'a, A::Doc>>,
+        B: Into<doc::Doc<'a, A, D::Doc>>,
     {
         let DocBuilder(allocator, this) = self;
         let that = that.into();
@@ -298,66 +307,72 @@ where
     /// horizontally and combined into a one single line, or they are each layed out on their own
     /// line.
     #[inline]
-    pub fn group(self) -> DocBuilder<'a, A> {
+    pub fn group(self) -> DocBuilder<'a, A, D> {
         let DocBuilder(allocator, this) = self;
         DocBuilder(allocator, Group(allocator.alloc(this)))
     }
 
     /// Increase the indentation level of this document.
     #[inline]
-    pub fn nest(self, offset: usize) -> DocBuilder<'a, A> {
+    pub fn nest(self, offset: usize) -> DocBuilder<'a, A, D> {
         if offset == 0 {
             return self;
         }
         let DocBuilder(allocator, this) = self;
         DocBuilder(allocator, Nest(offset, allocator.alloc(this)))
     }
+
+    #[inline]
+    pub fn annotate(self, ann: A) -> DocBuilder<'a, A, D> {
+        let DocBuilder(allocator, this) = self;
+        DocBuilder(allocator, Annotated(ann, allocator.alloc(this)))
+    }
 }
 
 /// Newtype wrapper for `&doc::Doc`
 #[derive(Clone, Eq, Ord, PartialEq, PartialOrd)]
-pub struct RefDoc<'a>(&'a doc::Doc<'a, RefDoc<'a>>);
+pub struct RefDoc<'a, A: 'a>(&'a doc::Doc<'a, A, RefDoc<'a, A>>);
 
-impl<'a> fmt::Debug for RefDoc<'a> {
+impl<'a, A> fmt::Debug for RefDoc<'a, A>
+where
+    A: fmt::Debug,
+{
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         self.0.fmt(f)
     }
 }
 
-impl<'a> Deref for RefDoc<'a> {
-    type Target = doc::Doc<'a, RefDoc<'a>>;
+impl<'a, A> Deref for RefDoc<'a, A> {
+    type Target = doc::Doc<'a, A, RefDoc<'a, A>>;
 
-    fn deref(&self) -> &doc::Doc<'a, RefDoc<'a>> {
+    fn deref(&self) -> &doc::Doc<'a, A, RefDoc<'a, A>> {
         &self.0
     }
 }
 
 /// An arena which can be used to allocate `Doc` values.
-pub type Arena<'a> = typed_arena::Arena<doc::Doc<'a, RefDoc<'a>>>;
+pub type Arena<'a, A> = typed_arena::Arena<doc::Doc<'a, A, RefDoc<'a, A>>>;
 
-impl<'a, A> DocAllocator<'a> for &'a A
+impl<'a, A, D> DocAllocator<'a, A> for &'a D
 where
-    A: ?Sized + DocAllocator<'a>,
+    D: ?Sized + DocAllocator<'a, A>,
 {
-    type Doc = A::Doc;
+    type Doc = D::Doc;
 
     #[inline]
-    fn alloc(&'a self, doc: doc::Doc<'a, Self::Doc>) -> Self::Doc {
+    fn alloc(&'a self, doc: doc::Doc<'a, A, Self::Doc>) -> Self::Doc {
         (**self).alloc(doc)
     }
 }
 
-impl<'a> DocAllocator<'a> for Arena<'a> {
-    type Doc = RefDoc<'a>;
+impl<'a, A> DocAllocator<'a, A> for Arena<'a, A> {
+    type Doc = RefDoc<'a, A>;
 
     #[inline]
-    fn alloc(&'a self, doc: doc::Doc<'a, Self::Doc>) -> Self::Doc {
-        static SPACE: doc::Doc<'static, RefDoc<'static>> = Doc::Space;
-        static NEWLINE: doc::Doc<'static, RefDoc<'static>> = Doc::Newline;
-
+    fn alloc(&'a self, doc: doc::Doc<'a, A, Self::Doc>) -> Self::Doc {
         RefDoc(match doc {
-            Space => &SPACE,
-            Newline => &NEWLINE,
+            Space => &Doc::Space,
+            Newline => &Doc::Newline,
             _ => Arena::alloc(self, doc),
         })
     }
@@ -367,21 +382,21 @@ pub struct BoxAllocator;
 
 static BOX_ALLOCATOR: BoxAllocator = BoxAllocator;
 
-impl<'a> DocAllocator<'a> for BoxAllocator {
-    type Doc = BoxDoc<'a>;
+impl<'a, A> DocAllocator<'a, A> for BoxAllocator {
+    type Doc = BoxDoc<'a, A>;
 
     #[inline]
-    fn alloc(&'a self, doc: doc::Doc<'a, Self::Doc>) -> Self::Doc {
+    fn alloc(&'a self, doc: doc::Doc<'a, A, Self::Doc>) -> Self::Doc {
         BoxDoc::new(doc)
     }
 }
 
 pub use doc::Doc;
 
-impl<'a, B> Doc<'a, B> {
+impl<'a, A, B> Doc<'a, A, B> {
     /// An empty document.
     #[inline]
-    pub fn nil() -> Doc<'a, B> {
+    pub fn nil() -> Doc<'a, A, B> {
         Nil
     }
 
@@ -389,19 +404,19 @@ impl<'a, B> Doc<'a, B> {
     ///
     /// The given text must not contain line breaks.
     #[inline]
-    pub fn as_string<T: ToString>(t: T) -> Doc<'a, B> {
+    pub fn as_string<T: ToString>(t: T) -> Doc<'a, A, B> {
         Doc::text(t.to_string())
     }
 
     /// A single newline.
     #[inline]
-    pub fn newline() -> Doc<'a, B> {
+    pub fn newline() -> Doc<'a, A, B> {
         Newline
     }
 
     /// The given text, which must not contain line breaks.
     #[inline]
-    pub fn text<T: Into<Cow<'a, str>>>(data: T) -> Doc<'a, B> {
+    pub fn text<T: Into<Cow<'a, str>>>(data: T) -> Doc<'a, A, B> {
         let text = data.into();
         debug_assert!(!text.contains(|c: char| c == '\n' || c == '\r'));
         Text(text)
@@ -409,23 +424,23 @@ impl<'a, B> Doc<'a, B> {
 
     /// A space.
     #[inline]
-    pub fn space() -> Doc<'a, B> {
+    pub fn space() -> Doc<'a, A, B> {
         Space
     }
 }
 
-impl<'a> Doc<'a, BoxDoc<'a>> {
+impl<'a, A> Doc<'a, A, BoxDoc<'a, A>> {
     /// Append the given document after this document.
     #[inline]
-    pub fn append(self, that: Doc<'a, BoxDoc<'a>>) -> Doc<'a, BoxDoc<'a>> {
+    pub fn append(self, that: Doc<'a, A, BoxDoc<'a, A>>) -> Doc<'a, A, BoxDoc<'a, A>> {
         DocBuilder(&BOX_ALLOCATOR, self).append(that).into()
     }
 
     /// A single document concatenating all the given documents.
     #[inline]
-    pub fn concat<I>(docs: I) -> Doc<'a, BoxDoc<'a>>
+    pub fn concat<I>(docs: I) -> Doc<'a, A, BoxDoc<'a, A>>
     where
-        I: IntoIterator<Item = Doc<'a, BoxDoc<'a>>>,
+        I: IntoIterator<Item = Doc<'a, A, BoxDoc<'a, A>>>,
     {
         docs.into_iter().fold(Doc::nil(), |a, b| a.append(b))
     }
@@ -435,10 +450,11 @@ impl<'a> Doc<'a, BoxDoc<'a>> {
     ///
     /// Compare [the `intersperse` method from the `itertools` crate](https://docs.rs/itertools/0.5.9/itertools/trait.Itertools.html#method.intersperse).
     #[inline]
-    pub fn intersperse<I, S>(docs: I, separator: S) -> Doc<'a, BoxDoc<'a>>
+    pub fn intersperse<I, S>(docs: I, separator: S) -> Doc<'a, A, BoxDoc<'a, A>>
     where
-        I: IntoIterator<Item = Doc<'a, BoxDoc<'a>>>,
-        S: Into<Doc<'a, BoxDoc<'a>>> + Clone,
+        I: IntoIterator<Item = Doc<'a, A, BoxDoc<'a, A>>>,
+        S: Into<Doc<'a, A, BoxDoc<'a, A>>> + Clone,
+        A: Clone,
     {
         let separator = separator.into();
         let mut result = Doc::nil();
@@ -460,14 +476,19 @@ impl<'a> Doc<'a, BoxDoc<'a>> {
     /// horizontally and combined into a one single line, or they are each layed out on their own
     /// line.
     #[inline]
-    pub fn group(self) -> Doc<'a, BoxDoc<'a>> {
+    pub fn group(self) -> Doc<'a, A, BoxDoc<'a, A>> {
         DocBuilder(&BOX_ALLOCATOR, self).group().into()
     }
 
     /// Increase the indentation level of this document.
     #[inline]
-    pub fn nest(self, offset: usize) -> Doc<'a, BoxDoc<'a>> {
+    pub fn nest(self, offset: usize) -> Doc<'a, A, BoxDoc<'a, A>> {
         DocBuilder(&BOX_ALLOCATOR, self).nest(offset).into()
+    }
+
+    #[inline]
+    pub fn annotate(self, ann: A) -> Doc<'a, A, BoxDoc<'a, A>> {
+        DocBuilder(&BOX_ALLOCATOR, self).annotate(ann).into()
     }
 }
 
@@ -488,7 +509,7 @@ mod tests {
 
     #[test]
     fn box_doc_inference() {
-        let doc = Doc::group(
+        let doc = Doc::<(), _>::group(
             Doc::text("test")
                 .append(Doc::space())
                 .append(Doc::text("test")),
@@ -499,7 +520,7 @@ mod tests {
 
     #[test]
     fn forced_newline() {
-        let doc = Doc::group(
+        let doc = Doc::<(), _>::group(
             Doc::text("test")
                 .append(Doc::newline())
                 .append(Doc::text("test")),
@@ -510,7 +531,7 @@ mod tests {
 
     #[test]
     fn space_do_not_reset_pos() {
-        let doc = Doc::group(Doc::text("test").append(Doc::space()))
+        let doc = Doc::<(), _>::group(Doc::text("test").append(Doc::space()))
             .append(Doc::text("test"))
             .append(Doc::group(Doc::space()).append(Doc::text("test")));
 
@@ -521,7 +542,7 @@ mod tests {
     // a single line but instead breaks on the `Doc::space()` to fit with 6 columns
     #[test]
     fn newline_does_not_cause_next_line_to_be_to_long() {
-        let doc = Doc::group(
+        let doc = Doc::<(), _>::group(
             Doc::text("test").append(Doc::newline()).append(
                 Doc::text("test")
                     .append(Doc::space())
@@ -534,7 +555,7 @@ mod tests {
 
     #[test]
     fn block() {
-        let doc = Doc::group(
+        let doc = Doc::<(), _>::group(
             Doc::text("{")
                 .append(
                     Doc::space()
@@ -548,5 +569,18 @@ mod tests {
         );
 
         test!(5, doc, "{\n  test\n  test\n}");
+    }
+
+    #[test]
+    fn annotation_no_panic() {
+        let doc = Doc::group(
+            Doc::text("test")
+                .annotate(())
+                .append(Doc::newline())
+                .annotate(())
+                .append(Doc::text("test")),
+        );
+
+        test!(doc, "test\ntest");
     }
 }

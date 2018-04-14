@@ -1,6 +1,6 @@
 [package]
 name = "pretty"
-version = "0.3.3"
+version = "0.4.0"
 authors = [ "Jonathan Sterling <jon@jonmsterling.com>", "Darin Morrison <darinmorrison+git@gmail.com>" ]
 description = "Wadler-style pretty-printing combinators in Rust"
 documentation = "https://docs.rs/pretty/"
@@ -9,11 +9,16 @@ license = "MIT"
 readme = "README.md"
 repository = "https://github.com/freebroccolo/pretty.rs"
 
-[[example]]
-name = "trees"
-
 [dependencies]
 typed-arena = "1.2.0"
+termcolor = { version = "0.3", optional = true }
 
 [dev-dependencies]
 tempfile = "2.1.4"
+
+[[example]]
+name = "colored"
+required-features = ["termcolor"]
+
+[package.metadata.docs.rs]
+features = ["termcolor"]

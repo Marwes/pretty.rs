@@ -4,7 +4,10 @@ use std::fmt;
 use std::io;
 use std::ops::Deref;
 
-pub use self::Doc::{Append, Group, Nest, Newline, Nil, Space, Text};
+#[cfg(feature = "termcolor")]
+use termcolor::{ColorSpec, WriteColor};
+
+pub use self::Doc::{Annotated, Append, Group, Nest, Newline, Nil, Space, Text};
 
 #[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
 enum Mode {
@@ -18,7 +21,7 @@ enum Mode {
 /// The `B` parameter is used to abstract over pointers to `Doc`. See `RefDoc` and `BoxDoc` for how
 /// it is used
 #[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
-pub enum Doc<'a, B> {
+pub enum Doc<'a, A, B> {
     Nil,
     Append(B, B),
     Group(B),
@@ -26,13 +29,14 @@ pub enum Doc<'a, B> {
     Space,
     Newline,
     Text(Cow<'a, str>),
+    Annotated(A, B),
 }
 
-impl<'a, B, S> From<S> for Doc<'a, B>
+impl<'a, A, B, S> From<S> for Doc<'a, A, B>
 where
     S: Into<Cow<'a, str>>,
 {
-    fn from(s: S) -> Doc<'a, B> {
+    fn from(s: S) -> Doc<'a, A, B> {
         Doc::Text(s.into())
     }
 }
@@ -78,29 +82,99 @@ where
     }
 }
 
-pub struct Pretty<'a, D>
+trait RenderAnnotated<A>: Render {
+    fn push_annotation(&mut self, annotation: &A) -> Result<(), Self::Error>;
+    fn pop_annotation(&mut self) -> Result<(), Self::Error>;
+}
+
+impl<A, W> RenderAnnotated<A> for IoWrite<W>
 where
+    W: io::Write,
+{
+    fn push_annotation(&mut self, _: &A) -> Result<(), Self::Error> {
+        Ok(())
+    }
+    fn pop_annotation(&mut self) -> Result<(), Self::Error> {
+        Ok(())
+    }
+}
+
+impl<A, W> RenderAnnotated<A> for FmtWrite<W>
+where
+    W: fmt::Write,
+{
+    fn push_annotation(&mut self, _: &A) -> Result<(), Self::Error> {
+        Ok(())
+    }
+    fn pop_annotation(&mut self) -> Result<(), Self::Error> {
+        Ok(())
+    }
+}
+
+#[cfg(feature = "termcolor")]
+struct TermColored<W> {
+    color_stack: Vec<ColorSpec>,
+    writer: W,
+}
+
+#[cfg(feature = "termcolor")]
+impl<W> Render for TermColored<W>
+where
+    W: io::Write,
+{
+    type Error = io::Error;
+
+    fn write_str(&mut self, s: &str) -> io::Result<usize> {
+        self.writer.write(s.as_bytes())
+    }
+
+    fn write_str_all(&mut self, s: &str) -> io::Result<()> {
+        self.writer.write_all(s.as_bytes())
+    }
+}
+
+#[cfg(feature = "termcolor")]
+impl<W> RenderAnnotated<ColorSpec> for TermColored<W>
+where
+    W: WriteColor,
+{
+    fn push_annotation(&mut self, color: &ColorSpec) -> Result<(), Self::Error> {
+        self.color_stack.push(color.clone());
+        self.writer.set_color(color)
+    }
+    fn pop_annotation(&mut self) -> Result<(), Self::Error> {
+        self.color_stack.pop();
+        match self.color_stack.last() {
+            Some(previous) => self.writer.set_color(previous),
+            None => self.writer.reset(),
+        }
+    }
+}
+
+pub struct Pretty<'a, A, D>
+where
+    A: 'a,
     D: 'a,
 {
-    doc: &'a Doc<'a, D>,
+    doc: &'a Doc<'a, A, D>,
     width: usize,
 }
 
-impl<'a, D> fmt::Display for Pretty<'a, D>
+impl<'a, A, D> fmt::Display for Pretty<'a, A, D>
 where
-    D: Deref<Target = Doc<'a, D>>,
+    D: Deref<Target = Doc<'a, A, D>>,
 {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         self.doc.render_fmt(self.width, f)
     }
 }
 
-impl<'a, B> Doc<'a, B> {
+impl<'a, A, B> Doc<'a, A, B> {
     /// Writes a rendered document to a `std::io::Write` object.
     #[inline]
     pub fn render<'b, W>(&'b self, width: usize, out: &mut W) -> io::Result<()>
     where
-        B: Deref<Target = Doc<'b, B>>,
+        B: Deref<Target = Doc<'b, A, B>>,
         W: ?Sized + io::Write,
     {
         best(self, width, &mut IoWrite(out))
@@ -110,7 +184,7 @@ impl<'a, B> Doc<'a, B> {
     #[inline]
     pub fn render_fmt<'b, W>(&'b self, width: usize, out: &mut W) -> fmt::Result
     where
-        B: Deref<Target = Doc<'b, B>>,
+        B: Deref<Target = Doc<'b, A, B>>,
         W: ?Sized + fmt::Write,
     {
         best(self, width, &mut FmtWrite(out))
@@ -120,15 +194,15 @@ impl<'a, B> Doc<'a, B> {
     ///
     /// ```
     /// use pretty::Doc;
-    /// let doc = Doc::group(
+    /// let doc = Doc::<(), _>::group(
     ///     Doc::text("hello").append(Doc::space()).append(Doc::text("world"))
     /// );
     /// assert_eq!(format!("{}", doc.pretty(80)), "hello world");
     /// ```
     #[inline]
-    pub fn pretty<'b>(&'b self, width: usize) -> Pretty<'b, B>
+    pub fn pretty<'b>(&'b self, width: usize) -> Pretty<'b, A, B>
     where
-        B: Deref<Target = Doc<'b, B>>,
+        B: Deref<Target = Doc<'b, A, B>>,
     {
         Pretty {
             doc: self,
@@ -137,7 +211,26 @@ impl<'a, B> Doc<'a, B> {
     }
 }
 
-type Cmd<'a, B> = (usize, Mode, &'a Doc<'a, B>);
+#[cfg(feature = "termcolor")]
+impl<'a, B> Doc<'a, ColorSpec, B> {
+    #[inline]
+    pub fn render_colored<'b, W>(&'b self, width: usize, out: W) -> io::Result<()>
+    where
+        B: Deref<Target = Doc<'b, ColorSpec, B>>,
+        W: WriteColor,
+    {
+        best(
+            self,
+            width,
+            &mut TermColored {
+                color_stack: Vec::new(),
+                writer: out,
+            },
+        )
+    }
+}
+
+type Cmd<'a, A, B> = (usize, Mode, &'a Doc<'a, A, B>);
 
 fn write_newline<W>(ind: usize, out: &mut W) -> Result<(), W::Error>
 where
@@ -169,14 +262,14 @@ where
 }
 
 #[inline]
-fn fitting<'a, B>(
-    next: Cmd<'a, B>,
-    bcmds: &Vec<Cmd<'a, B>>,
-    fcmds: &mut Vec<Cmd<'a, B>>,
+fn fitting<'a, A, B>(
+    next: Cmd<'a, A, B>,
+    bcmds: &Vec<Cmd<'a, A, B>>,
+    fcmds: &mut Vec<Cmd<'a, A, B>>,
     mut rem: isize,
 ) -> bool
 where
-    B: Deref<Target = Doc<'a, B>>,
+    B: Deref<Target = Doc<'a, A, B>>,
 {
     let mut bidx = bcmds.len();
     fcmds.clear(); // clear from previous calls from best
@@ -225,6 +318,7 @@ where
                     &Text(ref str) => {
                         rem -= str.len() as isize;
                     }
+                    &Annotated(_, ref doc) => fcmds.push((ind, mode, doc)),
                 }
             }
         }
@@ -233,14 +327,16 @@ where
 }
 
 #[inline]
-fn best<'a, W, B>(doc: &'a Doc<'a, B>, width: usize, out: &mut W) -> Result<(), W::Error>
+fn best<'a, W, A, B>(doc: &'a Doc<'a, A, B>, width: usize, out: &mut W) -> Result<(), W::Error>
 where
-    B: Deref<Target = Doc<'a, B>>,
-    W: ?Sized + Render,
+    B: Deref<Target = Doc<'a, A, B>>,
+    W: ?Sized + RenderAnnotated<A>,
 {
     let mut pos = 0usize;
     let mut bcmds = vec![(0usize, Mode::Break, doc)];
     let mut fcmds = vec![];
+    let mut annotation_levels = vec![];
+
     while let Some((ind, mode, doc)) = bcmds.pop() {
         match doc {
             &Nil => {}
@@ -306,6 +402,16 @@ where
                 try!(out.write_str_all(s));
                 pos += s.len();
             }
+            &Annotated(ref ann, ref doc) => {
+                try!(out.push_annotation(ann));
+                annotation_levels.push(bcmds.len());
+                bcmds.push((ind, mode, doc));
+            }
+        }
+
+        if annotation_levels.last() == Some(&bcmds.len()) {
+            annotation_levels.pop();
+            try!(out.pop_annotation());
         }
     }
     Ok(())
