@@ -47,7 +47,7 @@
 //! # use SExp::*;
 //! impl SExp {
 //!     /// Return a pretty printed format of self.
-//!     pub fn to_doc(&self) -> Doc<BoxDoc> {
+//!     pub fn to_doc(&self) -> Doc<(), BoxDoc<()>> {
 //!         match self {
 //!             &Atom(x) => Doc::as_string(x),
 //!             &List(ref xs) =>
@@ -72,7 +72,7 @@
 //! # use SExp::*;
 //! # impl SExp {
 //! #     /// Return a pretty printed format of self.
-//! #     pub fn to_doc(&self) -> Doc<BoxDoc> {
+//! #     pub fn to_doc(&self) -> Doc<(), BoxDoc<()>> {
 //! #         match self {
 //! #             &Atom(x) => Doc::as_string(x),
 //! #             &List(ref xs) =>
@@ -104,7 +104,7 @@
 //! # use SExp::*;
 //! # impl SExp {
 //! #     /// Return a pretty printed format of self.
-//! #     pub fn to_doc(&self) -> Doc<BoxDoc> {
+//! #     pub fn to_doc(&self) -> Doc<(), BoxDoc<()>> {
 //! #         match self {
 //! #             &Atom(x) => Doc::as_string(x),
 //! #             &List(ref xs) =>
