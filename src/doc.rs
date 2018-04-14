@@ -4,6 +4,7 @@ use std::fmt;
 use std::io;
 use std::ops::Deref;
 
+#[cfg(feature = "termcolor")]
 use termcolor::{ColorSpec, WriteColor};
 
 pub use self::Doc::{Annotated, Append, Group, Nest, Newline, Nil, Space, Text};
@@ -110,11 +111,13 @@ where
     }
 }
 
+#[cfg(feature = "termcolor")]
 struct TermColored<W> {
     color_stack: Vec<ColorSpec>,
     writer: W,
 }
 
+#[cfg(feature = "termcolor")]
 impl<W> Render for TermColored<W>
 where
     W: io::Write,
@@ -130,6 +133,7 @@ where
     }
 }
 
+#[cfg(feature = "termcolor")]
 impl<W> RenderAnnotated<ColorSpec> for TermColored<W>
 where
     W: WriteColor,
@@ -207,6 +211,7 @@ impl<'a, A, B> Doc<'a, A, B> {
     }
 }
 
+#[cfg(feature = "termcolor")]
 impl<'a, B> Doc<'a, ColorSpec, B> {
     #[inline]
     pub fn render_colored<'b, W>(&'b self, width: usize, out: W) -> io::Result<()>

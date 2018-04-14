@@ -141,6 +141,7 @@
 //! [examples/trees.rs](https://github.com/freebroccolo/pretty.rs/blob/master/examples/trees.rs#L39)
 //! for this approach.
 
+#[cfg(feature = "termcolor")]
 pub extern crate termcolor;
 extern crate typed_arena;
 
