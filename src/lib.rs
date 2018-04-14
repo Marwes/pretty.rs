@@ -127,9 +127,9 @@
 //! let list = SExp::List(vec![SExp::Atom(1), SExp::Atom(2), SExp::Atom(3)]);
 //! assert_eq!("(1 2 3)", list.to_pretty(10));
 //! assert_eq!("\
-//!(1
-//! 2
-//! 3)", list.to_pretty(5));
+//! (1
+//!  2
+//!  3)", list.to_pretty(5));
 //! # }
 //! ```
 //!
