@@ -1,5 +1,7 @@
 # pretty.rs
 
+[![Build Status](https://travis-ci.org/Marwes/pretty.rs.svg?branch=master)](https://travis-ci.org/Marwes/pretty.rs) [![Docs](https://docs.rs/pretty.rs/badge.svg)](https://docs.rs/pretty.rs)
+
 Pretty printing combinators for Rust
 
 ## Synopsis
@@ -34,8 +36,9 @@ See [Installing Rust](http://doc.rust-lang.org/guide.html#installing-rust) for f
 ## Usage
 
 ```
-$ cargo build       ## build library and binary
-$ cargo run         ## run the example (pretty trees)
-$ cargo bench       ## run benchmarks
-$ cargo test        ## run tests
+$ cargo build                                          ## build library and binary
+$ cargo run --example trees                            ## run the example (pretty trees)
+$ cargo run --example colored --features termcolor     ## run the example (pretty colored output)
+$ cargo bench                                          ## run benchmarks
+$ cargo test                                           ## run tests
 ```
