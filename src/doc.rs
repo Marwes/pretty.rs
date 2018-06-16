@@ -21,7 +21,7 @@ enum Mode {
 /// The `B` parameter is used to abstract over pointers to `Doc`. See `RefDoc` and `BoxDoc` for how
 /// it is used
 #[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
-pub enum Doc<'a, A, B> {
+pub enum Doc<'a, B, A = ()> {
     Nil,
     Append(B, B),
     Group(B),
@@ -32,11 +32,11 @@ pub enum Doc<'a, A, B> {
     Annotated(A, B),
 }
 
-impl<'a, A, B, S> From<S> for Doc<'a, A, B>
+impl<'a, B, A, S> From<S> for Doc<'a, B, A>
 where
     S: Into<Cow<'a, str>>,
 {
-    fn from(s: S) -> Doc<'a, A, B> {
+    fn from(s: S) -> Doc<'a, B, A> {
         Doc::Text(s.into())
     }
 }
@@ -151,30 +151,30 @@ where
     }
 }
 
-pub struct Pretty<'a, A, D>
+pub struct Pretty<'a, D, A>
 where
     A: 'a,
     D: 'a,
 {
-    doc: &'a Doc<'a, A, D>,
+    doc: &'a Doc<'a, D, A>,
     width: usize,
 }
 
-impl<'a, A, D> fmt::Display for Pretty<'a, A, D>
+impl<'a, D, A> fmt::Display for Pretty<'a, D, A>
 where
-    D: Deref<Target = Doc<'a, A, D>>,
+    D: Deref<Target = Doc<'a, D, A>>,
 {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         self.doc.render_fmt(self.width, f)
     }
 }
 
-impl<'a, A, B> Doc<'a, A, B> {
+impl<'a, B, A> Doc<'a, B, A> {
     /// Writes a rendered document to a `std::io::Write` object.
     #[inline]
     pub fn render<'b, W>(&'b self, width: usize, out: &mut W) -> io::Result<()>
     where
-        B: Deref<Target = Doc<'b, A, B>>,
+        B: Deref<Target = Doc<'b, B, A>>,
         W: ?Sized + io::Write,
     {
         best(self, width, &mut IoWrite(out))
@@ -184,7 +184,7 @@ impl<'a, A, B> Doc<'a, A, B> {
     #[inline]
     pub fn render_fmt<'b, W>(&'b self, width: usize, out: &mut W) -> fmt::Result
     where
-        B: Deref<Target = Doc<'b, A, B>>,
+        B: Deref<Target = Doc<'b, B, A>>,
         W: ?Sized + fmt::Write,
     {
         best(self, width, &mut FmtWrite(out))
@@ -194,15 +194,15 @@ impl<'a, A, B> Doc<'a, A, B> {
     ///
     /// ```
     /// use pretty::Doc;
-    /// let doc = Doc::<(), _>::group(
+    /// let doc = Doc::<_>::group(
     ///     Doc::text("hello").append(Doc::space()).append(Doc::text("world"))
     /// );
     /// assert_eq!(format!("{}", doc.pretty(80)), "hello world");
     /// ```
     #[inline]
-    pub fn pretty<'b>(&'b self, width: usize) -> Pretty<'b, A, B>
+    pub fn pretty<'b>(&'b self, width: usize) -> Pretty<'b, B, A>
     where
-        B: Deref<Target = Doc<'b, A, B>>,
+        B: Deref<Target = Doc<'b, B, A>>,
     {
         Pretty {
             doc: self,
@@ -230,7 +230,7 @@ impl<'a, B> Doc<'a, ColorSpec, B> {
     }
 }
 
-type Cmd<'a, A, B> = (usize, Mode, &'a Doc<'a, A, B>);
+type Cmd<'a, B, A> = (usize, Mode, &'a Doc<'a, B, A>);
 
 fn write_newline<W>(ind: usize, out: &mut W) -> Result<(), W::Error>
 where
@@ -262,14 +262,14 @@ where
 }
 
 #[inline]
-fn fitting<'a, A, B>(
-    next: Cmd<'a, A, B>,
-    bcmds: &Vec<Cmd<'a, A, B>>,
-    fcmds: &mut Vec<Cmd<'a, A, B>>,
+fn fitting<'a, B, A>(
+    next: Cmd<'a, B, A>,
+    bcmds: &Vec<Cmd<'a, B, A>>,
+    fcmds: &mut Vec<Cmd<'a, B, A>>,
     mut rem: isize,
 ) -> bool
 where
-    B: Deref<Target = Doc<'a, A, B>>,
+    B: Deref<Target = Doc<'a, B, A>>,
 {
     let mut bidx = bcmds.len();
     fcmds.clear(); // clear from previous calls from best
@@ -327,9 +327,9 @@ where
 }
 
 #[inline]
-fn best<'a, W, A, B>(doc: &'a Doc<'a, A, B>, width: usize, out: &mut W) -> Result<(), W::Error>
+fn best<'a, W, B, A>(doc: &'a Doc<'a, B, A>, width: usize, out: &mut W) -> Result<(), W::Error>
 where
-    B: Deref<Target = Doc<'a, A, B>>,
+    B: Deref<Target = Doc<'a, B, A>>,
     W: ?Sized + RenderAnnotated<A>,
 {
     let mut pos = 0usize;
