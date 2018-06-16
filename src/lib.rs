@@ -242,7 +242,6 @@ pub trait DocAllocator<'a, A = ()> {
     #[inline]
     fn text<T: Into<Cow<'a, str>>>(&'a self, data: T) -> DocBuilder<'a, Self, A> {
         let text = data.into();
-        debug_assert!(!text.contains(|c: char| c == '\n' || c == '\r'));
         DocBuilder(self, Text(text))
     }
 
@@ -418,7 +417,6 @@ impl<'a, A, B> Doc<'a, A, B> {
     #[inline]
     pub fn text<T: Into<Cow<'a, str>>>(data: T) -> Doc<'a, A, B> {
         let text = data.into();
-        debug_assert!(!text.contains(|c: char| c == '\n' || c == '\r'));
         Text(text)
     }
 
@@ -516,6 +514,19 @@ mod tests {
         );
 
         test!(doc, "test test");
+    }
+
+    #[test]
+    fn newline_in_text() {
+        let doc = Doc::<_>::group(
+            Doc::text("test").append(
+                Doc::space()
+                    .append(Doc::text("\"test\n     test\""))
+                    .nest(4),
+            ),
+        );
+
+        test!(5, doc, "test\n    \"test\n     test\"");
     }
 
     #[test]
