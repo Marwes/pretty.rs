@@ -41,14 +41,22 @@ where
     }
 }
 
-trait Render {
+/// Trait representing the operations necessary to render a document
+pub trait Render {
     type Error;
 
     fn write_str(&mut self, s: &str) -> Result<usize, Self::Error>;
-    fn write_str_all(&mut self, s: &str) -> Result<(), Self::Error>;
+    fn write_str_all(&mut self, mut s: &str) -> Result<(), Self::Error> {
+        while !s.is_empty() {
+            let count = self.write_str(s)?;
+            s = &s[count..];
+        }
+        Ok(())
+    }
 }
 
-struct IoWrite<W>(W);
+/// Writes to something implementing `std::io::Write`
+pub struct IoWrite<W>(pub W);
 
 impl<W> Render for IoWrite<W>
 where
@@ -65,7 +73,8 @@ where
     }
 }
 
-struct FmtWrite<W>(W);
+/// Writes to something implementing `std::fmt::Write`
+pub struct FmtWrite<W>(pub W);
 
 impl<W> Render for FmtWrite<W>
 where
@@ -82,7 +91,8 @@ where
     }
 }
 
-trait RenderAnnotated<A>: Render {
+/// Trait representing the operations necessary to write an annotated document.
+pub trait RenderAnnotated<A>: Render {
     fn push_annotation(&mut self, annotation: &A) -> Result<(), Self::Error>;
     fn pop_annotation(&mut self) -> Result<(), Self::Error>;
 }
@@ -177,7 +187,7 @@ impl<'a, B, A> Doc<'a, B, A> {
         B: Deref<Target = Doc<'b, B, A>>,
         W: ?Sized + io::Write,
     {
-        best(self, width, &mut IoWrite(out))
+        self.render_raw(width, &mut IoWrite(out))
     }
 
     /// Writes a rendered document to a `std::fmt::Write` object.
@@ -187,7 +197,17 @@ impl<'a, B, A> Doc<'a, B, A> {
         B: Deref<Target = Doc<'b, B, A>>,
         W: ?Sized + fmt::Write,
     {
-        best(self, width, &mut FmtWrite(out))
+        self.render_raw(width, &mut FmtWrite(out))
+    }
+
+    /// Writes a rendered document to a `RenderAnnotated<A>` object.
+    #[inline]
+    pub fn render_raw<'b, W>(&'b self, width: usize, out: &mut W) -> Result<(), W::Error>
+    where
+        B: Deref<Target = Doc<'b, B, A>>,
+        W: ?Sized + RenderAnnotated<A>,
+    {
+        best(self, width, out)
     }
 
     /// Returns a value which implements `std::fmt::Display`
@@ -212,11 +232,11 @@ impl<'a, B, A> Doc<'a, B, A> {
 }
 
 #[cfg(feature = "termcolor")]
-impl<'a, B> Doc<'a, ColorSpec, B> {
+impl<'a, B> Doc<'a, B, ColorSpec> {
     #[inline]
     pub fn render_colored<'b, W>(&'b self, width: usize, out: W) -> io::Result<()>
     where
-        B: Deref<Target = Doc<'b, ColorSpec, B>>,
+        B: Deref<Target = Doc<'b, B, ColorSpec>>,
         W: WriteColor,
     {
         best(
