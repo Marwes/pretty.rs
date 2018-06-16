@@ -1,13 +1,13 @@
 [package]
 name = "pretty"
-version = "0.4.0"
-authors = [ "Jonathan Sterling <jon@jonmsterling.com>", "Darin Morrison <darinmorrison+git@gmail.com>" ]
+version = "0.5.0"
+authors = [ "Jonathan Sterling <jon@jonmsterling.com>", "Darin Morrison <darinmorrison+git@gmail.com>", "Markus Westerlind <marwes91@gmail.com>"]
 description = "Wadler-style pretty-printing combinators in Rust"
 documentation = "https://docs.rs/pretty/"
 keywords = ["console", "functional", "pretty-printing"]
 license = "MIT"
 readme = "README.md"
-repository = "https://github.com/freebroccolo/pretty.rs"
+repository = "https://github.com/Marwes/pretty.rs"
 
 [dependencies]
 typed-arena = "1.2.0"

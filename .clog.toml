@@ -1,0 +1,6 @@
+[clog]
+repository = "https://github.com/Marwes/pretty.rs"
+
+changelog = "CHANGELOG.md"
+
+from-latest-tag = true
