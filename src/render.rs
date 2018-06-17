@@ -1,42 +1,16 @@
-use std::borrow::Cow;
 use std::cmp;
 use std::fmt;
 use std::io;
 use std::ops::Deref;
-
 #[cfg(feature = "termcolor")]
 use termcolor::{ColorSpec, WriteColor};
+
+use Doc;
 
 #[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
 enum Mode {
     Break,
     Flat,
-}
-
-/// The concrete document type. This type is not meant to be used directly. Instead use the static
-/// functions on `Doc` or the methods on an `DocAllocator`.
-///
-/// The `B` parameter is used to abstract over pointers to `Doc`. See `RefDoc` and `BoxDoc` for how
-/// it is used
-#[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
-pub enum Doc<'a, B, A = ()> {
-    Nil,
-    Append(B, B),
-    Group(B),
-    Nest(usize, B),
-    Space,
-    Newline,
-    Text(Cow<'a, str>),
-    Annotated(A, B),
-}
-
-impl<'a, B, A, S> From<S> for Doc<'a, B, A>
-where
-    S: Into<Cow<'a, str>>,
-{
-    fn from(s: S) -> Doc<'a, B, A> {
-        Doc::Text(s.into())
-    }
 }
 
 /// Trait representing the operations necessary to render a document
@@ -116,15 +90,26 @@ where
     fn push_annotation(&mut self, _: &A) -> Result<(), Self::Error> {
         Ok(())
     }
+
     fn pop_annotation(&mut self) -> Result<(), Self::Error> {
         Ok(())
     }
 }
 
 #[cfg(feature = "termcolor")]
-struct TermColored<W> {
+pub struct TermColored<W> {
     color_stack: Vec<ColorSpec>,
     writer: W,
+}
+
+#[cfg(feature = "termcolor")]
+impl<W> TermColored<W> {
+    pub fn new(writer: W) -> TermColored<W> {
+        TermColored {
+            color_stack: Vec::new(),
+            writer,
+        }
+    }
 }
 
 #[cfg(feature = "termcolor")]
@@ -152,98 +137,13 @@ where
         self.color_stack.push(color.clone());
         self.writer.set_color(color)
     }
+
     fn pop_annotation(&mut self) -> Result<(), Self::Error> {
         self.color_stack.pop();
         match self.color_stack.last() {
             Some(previous) => self.writer.set_color(previous),
             None => self.writer.reset(),
         }
-    }
-}
-
-pub struct Pretty<'a, D, A>
-where
-    A: 'a,
-    D: 'a,
-{
-    doc: &'a Doc<'a, D, A>,
-    width: usize,
-}
-
-impl<'a, D, A> fmt::Display for Pretty<'a, D, A>
-where
-    D: Deref<Target = Doc<'a, D, A>>,
-{
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        self.doc.render_fmt(self.width, f)
-    }
-}
-
-impl<'a, B, A> Doc<'a, B, A> {
-    /// Writes a rendered document to a `std::io::Write` object.
-    #[inline]
-    pub fn render<'b, W>(&'b self, width: usize, out: &mut W) -> io::Result<()>
-    where
-        B: Deref<Target = Doc<'b, B, A>>,
-        W: ?Sized + io::Write,
-    {
-        self.render_raw(width, &mut IoWrite(out))
-    }
-
-    /// Writes a rendered document to a `std::fmt::Write` object.
-    #[inline]
-    pub fn render_fmt<'b, W>(&'b self, width: usize, out: &mut W) -> fmt::Result
-    where
-        B: Deref<Target = Doc<'b, B, A>>,
-        W: ?Sized + fmt::Write,
-    {
-        self.render_raw(width, &mut FmtWrite(out))
-    }
-
-    /// Writes a rendered document to a `RenderAnnotated<A>` object.
-    #[inline]
-    pub fn render_raw<'b, W>(&'b self, width: usize, out: &mut W) -> Result<(), W::Error>
-    where
-        B: Deref<Target = Doc<'b, B, A>>,
-        W: ?Sized + RenderAnnotated<A>,
-    {
-        best(self, width, out)
-    }
-
-    /// Returns a value which implements `std::fmt::Display`
-    ///
-    /// ```
-    /// use pretty::Doc;
-    /// let doc = Doc::<_>::group(
-    ///     Doc::text("hello").append(Doc::space()).append(Doc::text("world"))
-    /// );
-    /// assert_eq!(format!("{}", doc.pretty(80)), "hello world");
-    /// ```
-    #[inline]
-    pub fn pretty<'b>(&'b self, width: usize) -> Pretty<'b, B, A>
-    where
-        B: Deref<Target = Doc<'b, B, A>>,
-    {
-        Pretty { doc: self, width }
-    }
-}
-
-#[cfg(feature = "termcolor")]
-impl<'a, B> Doc<'a, B, ColorSpec> {
-    #[inline]
-    pub fn render_colored<'b, W>(&'b self, width: usize, out: W) -> io::Result<()>
-    where
-        B: Deref<Target = Doc<'b, B, ColorSpec>>,
-        W: WriteColor,
-    {
-        best(
-            self,
-            width,
-            &mut TermColored {
-                color_stack: Vec::new(),
-                writer: out,
-            },
-        )
     }
 }
 
@@ -344,7 +244,7 @@ where
 }
 
 #[inline]
-fn best<'a, W, B, A>(doc: &'a Doc<'a, B, A>, width: usize, out: &mut W) -> Result<(), W::Error>
+pub fn best<'a, W, B, A>(doc: &'a Doc<'a, B, A>, width: usize, out: &mut W) -> Result<(), W::Error>
 where
     B: Deref<Target = Doc<'a, B, A>>,
     W: ?Sized + RenderAnnotated<A>,
