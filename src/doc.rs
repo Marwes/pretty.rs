@@ -224,10 +224,7 @@ impl<'a, B, A> Doc<'a, B, A> {
     where
         B: Deref<Target = Doc<'b, B, A>>,
     {
-        Pretty {
-            doc: self,
-            width: width,
-        }
+        Pretty { doc: self, width }
     }
 }
 
@@ -284,7 +281,7 @@ where
 #[inline]
 fn fitting<'a, B, A>(
     next: Cmd<'a, B, A>,
-    bcmds: &Vec<Cmd<'a, B, A>>,
+    bcmds: &[Cmd<'a, B, A>],
     fcmds: &mut Vec<Cmd<'a, B, A>>,
     mut rem: isize,
 ) -> bool
@@ -306,9 +303,9 @@ where
                 }
             }
             Some((ind, mode, doc)) => {
-                match doc {
-                    &Doc::Nil => {}
-                    &Doc::Append(ref ldoc, ref rdoc) => {
+                match *doc {
+                    Doc::Nil => {}
+                    Doc::Append(ref ldoc, ref rdoc) => {
                         fcmds.push((ind, mode, rdoc));
                         // Since appended documents often appear in sequence on the left side we
                         // gain a slight performance increase by batching these pushes (avoiding
@@ -320,13 +317,13 @@ where
                         }
                         fcmds.push((ind, mode, doc));
                     }
-                    &Doc::Group(ref doc) => {
+                    Doc::Group(ref doc) => {
                         fcmds.push((ind, mode, doc));
                     }
-                    &Doc::Nest(off, ref doc) => {
+                    Doc::Nest(off, ref doc) => {
                         fcmds.push((ind + off, mode, doc));
                     }
-                    &Doc::Space => match mode {
+                    Doc::Space => match mode {
                         Mode::Flat => {
                             rem -= 1;
                         }
@@ -334,11 +331,11 @@ where
                             return true;
                         }
                     },
-                    &Doc::Newline => return true,
-                    &Doc::Text(ref str) => {
+                    Doc::Newline => return true,
+                    Doc::Text(ref str) => {
                         rem -= str.len() as isize;
                     }
-                    &Doc::Annotated(_, ref doc) => fcmds.push((ind, mode, doc)),
+                    Doc::Annotated(_, ref doc) => fcmds.push((ind, mode, doc)),
                 }
             }
         }
@@ -358,9 +355,9 @@ where
     let mut annotation_levels = vec![];
 
     while let Some((ind, mode, doc)) = bcmds.pop() {
-        match doc {
-            &Doc::Nil => {}
-            &Doc::Append(ref ldoc, ref rdoc) => {
+        match *doc {
+            Doc::Nil => {}
+            Doc::Append(ref ldoc, ref rdoc) => {
                 bcmds.push((ind, mode, rdoc));
                 let mut doc = ldoc;
                 while let Doc::Append(ref l, ref r) = **doc {
@@ -369,7 +366,7 @@ where
                 }
                 bcmds.push((ind, mode, doc));
             }
-            &Doc::Group(ref doc) => match mode {
+            Doc::Group(ref doc) => match mode {
                 Mode::Flat => {
                     bcmds.push((ind, Mode::Flat, doc));
                 }
@@ -383,10 +380,10 @@ where
                     }
                 }
             },
-            &Doc::Nest(off, ref doc) => {
+            Doc::Nest(off, ref doc) => {
                 bcmds.push((ind + off, mode, doc));
             }
-            &Doc::Space => match mode {
+            Doc::Space => match mode {
                 Mode::Flat => {
                     try!(write_spaces(1, out));
                 }
@@ -395,7 +392,7 @@ where
                     pos = ind;
                 }
             },
-            &Doc::Newline => {
+            Doc::Newline => {
                 try!(write_newline(ind, out));
                 pos = ind;
 
@@ -407,7 +404,7 @@ where
                         .iter()
                         .rev()
                         .position(|t| t.1 == Mode::Break)
-                        .unwrap_or(bcmds.len());
+                        .unwrap_or_else(|| bcmds.len());
                 fcmds.extend_from_slice(&bcmds[docs..]);
                 if let Some(next) = fcmds.pop() {
                     let rem = width as isize - pos as isize;
@@ -418,11 +415,11 @@ where
                     }
                 }
             }
-            &Doc::Text(ref s) => {
+            Doc::Text(ref s) => {
                 try!(out.write_str_all(s));
                 pos += s.len();
             }
-            &Doc::Annotated(ref ann, ref doc) => {
+            Doc::Annotated(ref ann, ref doc) => {
                 try!(out.push_annotation(ann));
                 annotation_levels.push(bcmds.len());
                 bcmds.push((ind, mode, doc));
