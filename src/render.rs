@@ -249,8 +249,8 @@ where
         false
     }
 
-    let mut pos = 0usize;
-    let mut bcmds = vec![(0usize, Mode::Break, doc)];
+    let mut pos = 0;
+    let mut bcmds = vec![(0, Mode::Break, doc)];
     let mut fcmds = vec![];
     let mut annotation_levels = vec![];
 
