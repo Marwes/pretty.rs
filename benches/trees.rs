@@ -8,14 +8,14 @@ extern crate typed_arena;
 use std::io;
 
 use pretty::BoxAllocator;
-use typed_arena::Arena;
 use trees::Tree;
+use typed_arena::Arena;
 
 #[path = "../examples/trees.rs"]
 mod trees;
 
 macro_rules! bench_trees {
-    ($b: expr, $out: expr, $allocator: expr, $size: expr) => {{
+    ($b:expr, $out:expr, $allocator:expr, $size:expr) => {{
         let arena = Arena::new();
         let b = $b;
         let mut out = $out;
@@ -24,22 +24,22 @@ macro_rules! bench_trees {
         let mut example = Tree::node("aaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
 
         for _ in 0..size {
-            let bbbbbbs = arena.alloc_extend([
-                example,
-                Tree::node("dd"),
-            ].iter().cloned());
+            let bbbbbbs = arena.alloc_extend([example, Tree::node("dd")].iter().cloned());
 
-            let ffffs = arena.alloc_extend([
-                Tree::node("gg"),
-                Tree::node("hhh"),
-                Tree::node("ii"),
-            ].iter().cloned());
+            let ffffs = arena.alloc_extend(
+                [Tree::node("gg"), Tree::node("hhh"), Tree::node("ii")]
+                    .iter()
+                    .cloned(),
+            );
 
-            let aaas = arena.alloc_extend([
-                Tree::node_with_forest("bbbbbb", bbbbbbs),
-                Tree::node("eee"),
-                Tree::node_with_forest("ffff", ffffs),
-            ].iter().cloned());
+            let aaas = arena.alloc_extend(
+                [
+                    Tree::node_with_forest("bbbbbb", bbbbbbs),
+                    Tree::node("eee"),
+                    Tree::node_with_forest("ffff", ffffs),
+                ].iter()
+                    .cloned(),
+            );
 
             example = Tree::node_with_forest("aaa", aaas);
         }
@@ -47,9 +47,13 @@ macro_rules! bench_trees {
         let allocator = $allocator;
 
         b.iter(|| {
-            example.pretty::<(), _>(&allocator).1.render(70, &mut out).unwrap();
+            example
+                .pretty::<_, ()>(&allocator)
+                .1
+                .render(70, &mut out)
+                .unwrap();
         });
-    }}
+    }};
 }
 
 #[bench]
