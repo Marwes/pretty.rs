@@ -7,12 +7,6 @@ use termcolor::{ColorSpec, WriteColor};
 
 use Doc;
 
-#[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
-enum Mode {
-    Break,
-    Flat,
-}
-
 /// Trait representing the operations necessary to render a document
 pub trait Render {
     type Error;
@@ -147,108 +141,114 @@ where
     }
 }
 
-type Cmd<'a, B, A> = (usize, Mode, &'a Doc<'a, B, A>);
-
-fn write_newline<W>(ind: usize, out: &mut W) -> Result<(), W::Error>
-where
-    W: ?Sized + Render,
-{
-    try!(out.write_str_all("\n"));
-    write_spaces(ind, out)
-}
-
-fn write_spaces<W>(spaces: usize, out: &mut W) -> Result<(), W::Error>
-where
-    W: ?Sized + Render,
-{
-    macro_rules! make_spaces {
-        () => {
-            ""
-        };
-        ($s: tt $($t: tt)*) => {
-            concat!("          ", make_spaces!($($t)*))
-        };
-    }
-    const SPACES: &str = make_spaces!(,,,,,,,,,,);
-    let mut inserted = 0;
-    while inserted < spaces {
-        let insert = cmp::min(SPACES.len(), spaces - inserted);
-        inserted += try!(out.write_str(&SPACES[..insert]));
-    }
-    Ok(())
-}
-
-#[inline]
-fn fitting<'a, B, A>(
-    next: Cmd<'a, B, A>,
-    bcmds: &[Cmd<'a, B, A>],
-    fcmds: &mut Vec<Cmd<'a, B, A>>,
-    mut rem: isize,
-) -> bool
-where
-    B: Deref<Target = Doc<'a, B, A>>,
-{
-    let mut bidx = bcmds.len();
-    fcmds.clear(); // clear from previous calls from best
-    fcmds.push(next);
-    while rem >= 0 {
-        match fcmds.pop() {
-            None => {
-                if bidx == 0 {
-                    // All commands have been processed
-                    return true;
-                } else {
-                    fcmds.push(bcmds[bidx - 1]);
-                    bidx -= 1;
-                }
-            }
-            Some((ind, mode, doc)) => {
-                match *doc {
-                    Doc::Nil => {}
-                    Doc::Append(ref ldoc, ref rdoc) => {
-                        fcmds.push((ind, mode, rdoc));
-                        // Since appended documents often appear in sequence on the left side we
-                        // gain a slight performance increase by batching these pushes (avoiding
-                        // to push and directly pop `Append` documents)
-                        let mut doc = ldoc;
-                        while let Doc::Append(ref l, ref r) = **doc {
-                            fcmds.push((ind, mode, r));
-                            doc = l;
-                        }
-                        fcmds.push((ind, mode, doc));
-                    }
-                    Doc::Group(ref doc) => {
-                        fcmds.push((ind, mode, doc));
-                    }
-                    Doc::Nest(off, ref doc) => {
-                        fcmds.push((ind + off, mode, doc));
-                    }
-                    Doc::Space => match mode {
-                        Mode::Flat => {
-                            rem -= 1;
-                        }
-                        Mode::Break => {
-                            return true;
-                        }
-                    },
-                    Doc::Newline => return true,
-                    Doc::Text(ref str) => {
-                        rem -= str.len() as isize;
-                    }
-                    Doc::Annotated(_, ref doc) => fcmds.push((ind, mode, doc)),
-                }
-            }
-        }
-    }
-    false
-}
-
 #[inline]
 pub fn best<'a, W, B, A>(doc: &'a Doc<'a, B, A>, width: usize, out: &mut W) -> Result<(), W::Error>
 where
     B: Deref<Target = Doc<'a, B, A>>,
     W: ?Sized + RenderAnnotated<A>,
 {
+    #[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
+    enum Mode {
+        Break,
+        Flat,
+    }
+
+    type Cmd<'a, B, A> = (usize, Mode, &'a Doc<'a, B, A>);
+
+    fn write_newline<W>(ind: usize, out: &mut W) -> Result<(), W::Error>
+    where
+        W: ?Sized + Render,
+    {
+        try!(out.write_str_all("\n"));
+        write_spaces(ind, out)
+    }
+
+    fn write_spaces<W>(spaces: usize, out: &mut W) -> Result<(), W::Error>
+    where
+        W: ?Sized + Render,
+    {
+        macro_rules! make_spaces {
+            () => { "" };
+            ($s: tt $($t: tt)*) => { concat!("          ", make_spaces!($($t)*)) };
+        }
+
+        const SPACES: &str = make_spaces!(,,,,,,,,,,);
+        let mut inserted = 0;
+        while inserted < spaces {
+            let insert = cmp::min(SPACES.len(), spaces - inserted);
+            inserted += try!(out.write_str(&SPACES[..insert]));
+        }
+
+        Ok(())
+    }
+
+    #[inline]
+    fn fitting<'a, B, A>(
+        next: Cmd<'a, B, A>,
+        bcmds: &[Cmd<'a, B, A>],
+        fcmds: &mut Vec<Cmd<'a, B, A>>,
+        mut rem: isize,
+    ) -> bool
+    where
+        B: Deref<Target = Doc<'a, B, A>>,
+    {
+        let mut bidx = bcmds.len();
+        fcmds.clear(); // clear from previous calls from best
+        fcmds.push(next);
+
+        while rem >= 0 {
+            match fcmds.pop() {
+                None => {
+                    if bidx == 0 {
+                        // All commands have been processed
+                        return true;
+                    } else {
+                        fcmds.push(bcmds[bidx - 1]);
+                        bidx -= 1;
+                    }
+                }
+                Some((ind, mode, doc)) => {
+                    match *doc {
+                        Doc::Nil => {}
+                        Doc::Append(ref ldoc, ref rdoc) => {
+                            fcmds.push((ind, mode, rdoc));
+                            // Since appended documents often appear in sequence on the left side we
+                            // gain a slight performance increase by batching these pushes (avoiding
+                            // to push and directly pop `Append` documents)
+                            let mut doc = ldoc;
+                            while let Doc::Append(ref l, ref r) = **doc {
+                                fcmds.push((ind, mode, r));
+                                doc = l;
+                            }
+                            fcmds.push((ind, mode, doc));
+                        }
+                        Doc::Group(ref doc) => {
+                            fcmds.push((ind, mode, doc));
+                        }
+                        Doc::Nest(off, ref doc) => {
+                            fcmds.push((ind + off, mode, doc));
+                        }
+                        Doc::Space => match mode {
+                            Mode::Flat => {
+                                rem -= 1;
+                            }
+                            Mode::Break => {
+                                return true;
+                            }
+                        },
+                        Doc::Newline => return true,
+                        Doc::Text(ref str) => {
+                            rem -= str.len() as isize;
+                        }
+                        Doc::Annotated(_, ref doc) => fcmds.push((ind, mode, doc)),
+                    }
+                }
+            }
+        }
+
+        false
+    }
+
     let mut pos = 0usize;
     let mut bcmds = vec![(0usize, Mode::Break, doc)];
     let mut fcmds = vec![];
@@ -331,5 +331,6 @@ where
             try!(out.pop_annotation());
         }
     }
+
     Ok(())
 }
