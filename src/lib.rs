@@ -161,24 +161,24 @@ pub use self::render::{FmtWrite, IoWrite, Render, RenderAnnotated};
 /// The concrete document type. This type is not meant to be used directly. Instead use the static
 /// functions on `Doc` or the methods on an `DocAllocator`.
 ///
-/// The `B` parameter is used to abstract over pointers to `Doc`. See `RefDoc` and `BoxDoc` for how
+/// The `T` parameter is used to abstract over pointers to `Doc`. See `RefDoc` and `BoxDoc` for how
 /// it is used
 #[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
-pub enum Doc<'a, B, A = ()> {
+pub enum Doc<'a, T, A = ()> {
     Nil,
-    Append(B, B),
-    Group(B),
-    Nest(usize, B),
+    Append(T, T),
+    Group(T),
+    Nest(usize, T),
     Space,
     Newline,
     Text(Cow<'a, str>),
-    Annotated(A, B),
+    Annotated(A, T),
 }
 
-impl<'a, A, B> Doc<'a, A, B> {
+impl<'a, T, A> Doc<'a, T, A> {
     /// An empty document.
     #[inline]
-    pub fn nil() -> Doc<'a, A, B> {
+    pub fn nil() -> Doc<'a, T, A> {
         Doc::Nil
     }
 
@@ -186,26 +186,25 @@ impl<'a, A, B> Doc<'a, A, B> {
     ///
     /// The given text must not contain line breaks.
     #[inline]
-    pub fn as_string<T: ToString>(t: &T) -> Doc<'a, A, B> {
-        Doc::text(t.to_string())
+    pub fn as_string<U: ToString>(data: &U) -> Doc<'a, T, A> {
+        Doc::text(data.to_string())
     }
 
     /// A single newline.
     #[inline]
-    pub fn newline() -> Doc<'a, A, B> {
+    pub fn newline() -> Doc<'a, T, A> {
         Doc::Newline
     }
 
     /// The given text, which must not contain line breaks.
     #[inline]
-    pub fn text<T: Into<Cow<'a, str>>>(data: T) -> Doc<'a, A, B> {
-        let text = data.into();
-        Doc::Text(text)
+    pub fn text<U: Into<Cow<'a, str>>>(data: U) -> Doc<'a, T, A> {
+        Doc::Text(data.into())
     }
 
     /// A space.
     #[inline]
-    pub fn space() -> Doc<'a, A, B> {
+    pub fn space() -> Doc<'a, T, A> {
         Doc::Space
     }
 }
@@ -213,9 +212,9 @@ impl<'a, A, B> Doc<'a, A, B> {
 impl<'a, A> Doc<'a, BoxDoc<'a, A>, A> {
     /// Append the given document after this document.
     #[inline]
-    pub fn append<B>(self, that: B) -> Doc<'a, BoxDoc<'a, A>, A>
+    pub fn append<D>(self, that: D) -> Doc<'a, BoxDoc<'a, A>, A>
     where
-        B: Into<Doc<'a, BoxDoc<'a, A>, A>>,
+        D: Into<Doc<'a, BoxDoc<'a, A>, A>>,
     {
         DocBuilder(&BOX_ALLOCATOR, self).append(that).into()
     }
@@ -278,39 +277,39 @@ impl<'a, A> Doc<'a, BoxDoc<'a, A>, A> {
     }
 }
 
-impl<'a, B, A, S> From<S> for Doc<'a, B, A>
+impl<'a, T, A, S> From<S> for Doc<'a, T, A>
 where
     S: Into<Cow<'a, str>>,
 {
-    fn from(s: S) -> Doc<'a, B, A> {
+    fn from(s: S) -> Doc<'a, T, A> {
         Doc::Text(s.into())
     }
 }
 
-pub struct Pretty<'a, D, A>
+pub struct Pretty<'a, T, A>
 where
     A: 'a,
-    D: 'a,
+    T: 'a,
 {
-    doc: &'a Doc<'a, D, A>,
+    doc: &'a Doc<'a, T, A>,
     width: usize,
 }
 
-impl<'a, D, A> fmt::Display for Pretty<'a, D, A>
+impl<'a, T, A> fmt::Display for Pretty<'a, T, A>
 where
-    D: Deref<Target = Doc<'a, D, A>>,
+    T: Deref<Target = Doc<'a, T, A>>,
 {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         self.doc.render_fmt(self.width, f)
     }
 }
 
-impl<'a, B, A> Doc<'a, B, A> {
+impl<'a, T, A> Doc<'a, T, A> {
     /// Writes a rendered document to a `std::io::Write` object.
     #[inline]
     pub fn render<'b, W>(&'b self, width: usize, out: &mut W) -> io::Result<()>
     where
-        B: Deref<Target = Doc<'b, B, A>>,
+        T: Deref<Target = Doc<'b, T, A>>,
         W: ?Sized + io::Write,
     {
         self.render_raw(width, &mut IoWrite::new(out))
@@ -320,7 +319,7 @@ impl<'a, B, A> Doc<'a, B, A> {
     #[inline]
     pub fn render_fmt<'b, W>(&'b self, width: usize, out: &mut W) -> fmt::Result
     where
-        B: Deref<Target = Doc<'b, B, A>>,
+        T: Deref<Target = Doc<'b, T, A>>,
         W: ?Sized + fmt::Write,
     {
         self.render_raw(width, &mut FmtWrite::new(out))
@@ -330,7 +329,7 @@ impl<'a, B, A> Doc<'a, B, A> {
     #[inline]
     pub fn render_raw<'b, W>(&'b self, width: usize, out: &mut W) -> Result<(), W::Error>
     where
-        B: Deref<Target = Doc<'b, B, A>>,
+        T: Deref<Target = Doc<'b, T, A>>,
         W: ?Sized + render::RenderAnnotated<A>,
     {
         render::best(self, width, out)
@@ -346,20 +345,20 @@ impl<'a, B, A> Doc<'a, B, A> {
     /// assert_eq!(format!("{}", doc.pretty(80)), "hello world");
     /// ```
     #[inline]
-    pub fn pretty<'b>(&'b self, width: usize) -> Pretty<'b, B, A>
+    pub fn pretty<'b>(&'b self, width: usize) -> Pretty<'b, T, A>
     where
-        B: Deref<Target = Doc<'b, B, A>>,
+        T: Deref<Target = Doc<'b, T, A>>,
     {
         Pretty { doc: self, width }
     }
 }
 
 #[cfg(feature = "termcolor")]
-impl<'a, B> Doc<'a, B, ColorSpec> {
+impl<'a, T> Doc<'a, T, ColorSpec> {
     #[inline]
     pub fn render_colored<'b, W>(&'b self, width: usize, out: W) -> io::Result<()>
     where
-        B: Deref<Target = Doc<'b, B, ColorSpec>>,
+        T: Deref<Target = Doc<'b, T, ColorSpec>>,
         W: WriteColor,
     {
         render::best(self, width, &mut TermColored::new(out))
@@ -447,17 +446,16 @@ pub trait DocAllocator<'a, A = ()> {
     ///
     /// The given text must not contain line breaks.
     #[inline]
-    fn as_string<T: ToString>(&'a self, t: &T) -> DocBuilder<'a, Self, A> {
-        self.text(t.to_string())
+    fn as_string<U: ToString>(&'a self, data: &U) -> DocBuilder<'a, Self, A> {
+        self.text(data.to_string())
     }
 
     /// Allocate a document containing the given text.
     ///
     /// The given text must not contain line breaks.
     #[inline]
-    fn text<T: Into<Cow<'a, str>>>(&'a self, data: T) -> DocBuilder<'a, Self, A> {
-        let text = data.into();
-        DocBuilder(self, Doc::Text(text))
+    fn text<U: Into<Cow<'a, str>>>(&'a self, data: U) -> DocBuilder<'a, Self, A> {
+        DocBuilder(self, Doc::Text(data.into()))
     }
 
     /// Allocate a document concatenating the given documents.
@@ -500,9 +498,9 @@ where
 {
     /// Append the given document after this document.
     #[inline]
-    pub fn append<B>(self, that: B) -> DocBuilder<'a, D, A>
+    pub fn append<E>(self, that: E) -> DocBuilder<'a, D, A>
     where
-        B: Into<Doc<'a, D::Doc, A>>,
+        E: Into<Doc<'a, D::Doc, A>>,
     {
         let DocBuilder(allocator, this) = self;
         let that = that.into();

@@ -158,9 +158,9 @@ where
 }
 
 #[inline]
-pub fn best<'a, W, B, A>(doc: &'a Doc<'a, B, A>, width: usize, out: &mut W) -> Result<(), W::Error>
+pub fn best<'a, W, T, A>(doc: &'a Doc<'a, T, A>, width: usize, out: &mut W) -> Result<(), W::Error>
 where
-    B: Deref<Target = Doc<'a, B, A>>,
+    T: Deref<Target = Doc<'a, T, A>>,
     W: ?Sized + RenderAnnotated<A>,
 {
     #[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
@@ -169,7 +169,7 @@ where
         Flat,
     }
 
-    type Cmd<'a, B, A> = (usize, Mode, &'a Doc<'a, B, A>);
+    type Cmd<'a, T, A> = (usize, Mode, &'a Doc<'a, T, A>);
 
     fn write_newline<W>(ind: usize, out: &mut W) -> Result<(), W::Error>
     where
@@ -199,14 +199,14 @@ where
     }
 
     #[inline]
-    fn fitting<'a, B, A>(
-        next: Cmd<'a, B, A>,
-        bcmds: &[Cmd<'a, B, A>],
-        fcmds: &mut Vec<Cmd<'a, B, A>>,
+    fn fitting<'a, T, A>(
+        next: Cmd<'a, T, A>,
+        bcmds: &[Cmd<'a, T, A>],
+        fcmds: &mut Vec<Cmd<'a, T, A>>,
         mut rem: isize,
     ) -> bool
     where
-        B: Deref<Target = Doc<'a, B, A>>,
+        T: Deref<Target = Doc<'a, T, A>>,
     {
         let mut bidx = bcmds.len();
         fcmds.clear(); // clear from previous calls from best
