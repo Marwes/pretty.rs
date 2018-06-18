@@ -209,7 +209,10 @@ impl<'a, A, B> Doc<'a, A, B> {
 impl<'a, A> Doc<'a, BoxDoc<'a, A>, A> {
     /// Append the given document after this document.
     #[inline]
-    pub fn append(self, that: Doc<'a, BoxDoc<'a, A>, A>) -> Doc<'a, BoxDoc<'a, A>, A> {
+    pub fn append<B>(self, that: B) -> Doc<'a, BoxDoc<'a, A>, A>
+    where
+        B: Into<Doc<'a, BoxDoc<'a, A>, A>>,
+    {
         DocBuilder(&BOX_ALLOCATOR, self).append(that).into()
     }
 
@@ -217,7 +220,8 @@ impl<'a, A> Doc<'a, BoxDoc<'a, A>, A> {
     #[inline]
     pub fn concat<I>(docs: I) -> Doc<'a, BoxDoc<'a, A>, A>
     where
-        I: IntoIterator<Item = Doc<'a, BoxDoc<'a, A>, A>>,
+        I: IntoIterator,
+        I::Item: Into<Doc<'a, BoxDoc<'a, A>, A>>,
     {
         docs.into_iter().fold(Doc::nil(), |a, b| a.append(b))
     }
@@ -229,7 +233,8 @@ impl<'a, A> Doc<'a, BoxDoc<'a, A>, A> {
     #[inline]
     pub fn intersperse<I, S>(docs: I, separator: S) -> Doc<'a, BoxDoc<'a, A>, A>
     where
-        I: IntoIterator<Item = Doc<'a, BoxDoc<'a, A>, A>>,
+        I: IntoIterator,
+        I::Item: Into<Doc<'a, BoxDoc<'a, A>, A>>,
         S: Into<Doc<'a, BoxDoc<'a, A>, A>> + Clone,
         A: Clone,
     {
@@ -386,13 +391,14 @@ impl<'a, A> Deref for BoxDoc<'a, A> {
 /// The `DocBuilder` type allows for convenient appending of documents even for arena allocated
 /// documents by storing the arena inline.
 #[derive(Eq, Ord, PartialEq, PartialOrd)]
-pub struct DocBuilder<'a, D: ?Sized, A = ()>(pub &'a D, pub Doc<'a, D::Doc, A>)
+pub struct DocBuilder<'a, D, A = ()>(pub &'a D, pub Doc<'a, D::Doc, A>)
 where
-    D: DocAllocator<'a, A> + 'a;
+    D: ?Sized + DocAllocator<'a, A> + 'a;
 
-impl<'a, A, D: DocAllocator<'a, A> + 'a> Clone for DocBuilder<'a, D, A>
+impl<'a, A, D> Clone for DocBuilder<'a, D, A>
 where
     A: Clone,
+    D: DocAllocator<'a, A> + 'a,
     D::Doc: Clone,
 {
     fn clone(&self) -> Self {
@@ -400,9 +406,9 @@ where
     }
 }
 
-impl<'a, D: ?Sized, A> Into<Doc<'a, D::Doc, A>> for DocBuilder<'a, D, A>
+impl<'a, D, A> Into<Doc<'a, D::Doc, A>> for DocBuilder<'a, D, A>
 where
-    D: DocAllocator<'a, A>,
+    D: ?Sized + DocAllocator<'a, A>,
 {
     fn into(self) -> Doc<'a, D::Doc, A> {
         self.1
@@ -484,9 +490,9 @@ pub trait DocAllocator<'a, A = ()> {
     }
 }
 
-impl<'a, 's, D: ?Sized, A> DocBuilder<'a, D, A>
+impl<'a, 's, D, A> DocBuilder<'a, D, A>
 where
-    D: DocAllocator<'a, A>,
+    D: ?Sized + DocAllocator<'a, A>,
 {
     /// Append the given document after this document.
     #[inline]
