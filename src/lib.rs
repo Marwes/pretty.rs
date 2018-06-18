@@ -588,6 +588,9 @@ impl<'a, A> DocAllocator<'a, A> for Arena<'a, A> {
     #[inline]
     fn alloc(&'a self, doc: Doc<'a, Self::Doc, A>) -> Self::Doc {
         RefDoc(match doc {
+            // Return 'static references for unit variants to save a small
+            // amount of space in the arena
+            Doc::Nil => &Doc::Nil,
             Doc::Space => &Doc::Space,
             Doc::Newline => &Doc::Newline,
             _ => Arena::alloc(self, doc),
