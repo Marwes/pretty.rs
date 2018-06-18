@@ -48,9 +48,9 @@
 //! impl SExp {
 //!     /// Return a pretty printed format of self.
 //!     pub fn to_doc(&self) -> Doc<BoxDoc<()>> {
-//!         match self {
-//!             &Atom(x) => Doc::as_string(x),
-//!             &List(ref xs) =>
+//!         match *self {
+//!             Atom(ref x) => Doc::as_string(x),
+//!             List(ref xs) =>
 //!                 Doc::text("(")
 //!                     .append(Doc::intersperse(xs.into_iter().map(|x| x.to_doc()), Doc::space()).nest(1).group())
 //!                     .append(Doc::text(")"))
@@ -73,9 +73,9 @@
 //! # impl SExp {
 //! #     /// Return a pretty printed format of self.
 //! #     pub fn to_doc(&self) -> Doc<BoxDoc<()>> {
-//! #         match self {
-//! #             &Atom(x) => Doc::as_string(x),
-//! #             &List(ref xs) =>
+//! #         match *self {
+//! #             Atom(ref x) => Doc::as_string(x),
+//! #             List(ref xs) =>
 //! #                 Doc::text("(")
 //! #                     .append(Doc::intersperse(xs.into_iter().map(|x| x.to_doc()), Doc::space()).nest(1).group())
 //! #                     .append(Doc::text(")"))
@@ -105,9 +105,9 @@
 //! # impl SExp {
 //! #     /// Return a pretty printed format of self.
 //! #     pub fn to_doc(&self) -> Doc<BoxDoc<()>> {
-//! #         match self {
-//! #             &Atom(x) => Doc::as_string(x),
-//! #             &List(ref xs) =>
+//! #         match *self {
+//! #             Atom(ref x) => Doc::as_string(x),
+//! #             List(ref xs) =>
 //! #                 Doc::text("(")
 //! #                     .append(Doc::intersperse(xs.into_iter().map(|x| x.to_doc()), Doc::space()).nest(1).group())
 //! #                     .append(Doc::text(")"))
@@ -182,7 +182,7 @@ impl<'a, A, B> Doc<'a, A, B> {
     ///
     /// The given text must not contain line breaks.
     #[inline]
-    pub fn as_string<T: ToString>(t: T) -> Doc<'a, A, B> {
+    pub fn as_string<T: ToString>(t: &T) -> Doc<'a, A, B> {
         Doc::text(t.to_string())
     }
 
@@ -443,7 +443,7 @@ pub trait DocAllocator<'a, A = ()> {
     ///
     /// The given text must not contain line breaks.
     #[inline]
-    fn as_string<T: ToString>(&'a self, t: T) -> DocBuilder<'a, Self, A> {
+    fn as_string<T: ToString>(&'a self, t: &T) -> DocBuilder<'a, Self, A> {
         self.text(t.to_string())
     }
 
