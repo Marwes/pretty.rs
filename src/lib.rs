@@ -241,16 +241,18 @@ impl<'a, A> Doc<'a, BoxDoc<'a, A>, A> {
         S: Into<Doc<'a, BoxDoc<'a, A>, A>> + Clone,
         A: Clone,
     {
-        let separator = separator.into();
         let mut result = Doc::nil();
         let mut iter = docs.into_iter();
+
         if let Some(first) = iter.next() {
             result = result.append(first);
+
+            for doc in iter {
+                result = result.append(separator.clone());
+                result = result.append(doc);
+            }
         }
-        for doc in iter {
-            result = result.append(separator.clone());
-            result = result.append(doc);
-        }
+
         result
     }
 
@@ -481,13 +483,16 @@ pub trait DocAllocator<'a, A = ()> {
     {
         let mut result = self.nil();
         let mut iter = docs.into_iter();
+
         if let Some(first) = iter.next() {
             result = result.append(first);
+
+            for doc in iter {
+                result = result.append(separator.clone());
+                result = result.append(doc);
+            }
         }
-        for doc in iter {
-            result = result.append(separator.clone());
-            result = result.append(doc);
-        }
+
         result
     }
 }
