@@ -154,6 +154,10 @@ use termcolor::{ColorSpec, WriteColor};
 
 mod render;
 
+#[cfg(feature = "termcolor")]
+pub use self::render::TermColored;
+pub use self::render::{FmtWrite, IoWrite, Render, RenderAnnotated};
+
 /// The concrete document type. This type is not meant to be used directly. Instead use the static
 /// functions on `Doc` or the methods on an `DocAllocator`.
 ///
@@ -309,7 +313,7 @@ impl<'a, B, A> Doc<'a, B, A> {
         B: Deref<Target = Doc<'b, B, A>>,
         W: ?Sized + io::Write,
     {
-        self.render_raw(width, &mut render::IoWrite::new(out))
+        self.render_raw(width, &mut IoWrite::new(out))
     }
 
     /// Writes a rendered document to a `std::fmt::Write` object.
@@ -319,7 +323,7 @@ impl<'a, B, A> Doc<'a, B, A> {
         B: Deref<Target = Doc<'b, B, A>>,
         W: ?Sized + fmt::Write,
     {
-        self.render_raw(width, &mut render::FmtWrite::new(out))
+        self.render_raw(width, &mut FmtWrite::new(out))
     }
 
     /// Writes a rendered document to a `RenderAnnotated<A>` object.
@@ -358,7 +362,7 @@ impl<'a, B> Doc<'a, B, ColorSpec> {
         B: Deref<Target = Doc<'b, B, ColorSpec>>,
         W: WriteColor,
     {
-        render::best(self, width, &mut render::TermColored::new(out))
+        render::best(self, width, &mut TermColored::new(out))
     }
 }
 
