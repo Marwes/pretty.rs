@@ -309,7 +309,7 @@ impl<'a, B, A> Doc<'a, B, A> {
         B: Deref<Target = Doc<'b, B, A>>,
         W: ?Sized + io::Write,
     {
-        self.render_raw(width, &mut render::IoWrite(out))
+        self.render_raw(width, &mut render::IoWrite::new(out))
     }
 
     /// Writes a rendered document to a `std::fmt::Write` object.
@@ -319,7 +319,7 @@ impl<'a, B, A> Doc<'a, B, A> {
         B: Deref<Target = Doc<'b, B, A>>,
         W: ?Sized + fmt::Write,
     {
-        self.render_raw(width, &mut render::FmtWrite(out))
+        self.render_raw(width, &mut render::FmtWrite::new(out))
     }
 
     /// Writes a rendered document to a `RenderAnnotated<A>` object.

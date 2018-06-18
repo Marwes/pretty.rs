@@ -23,7 +23,15 @@ pub trait Render {
 }
 
 /// Writes to something implementing `std::io::Write`
-pub struct IoWrite<W>(pub W);
+pub struct IoWrite<W> {
+    upstream: W,
+}
+
+impl<W> IoWrite<W> {
+    pub fn new(upstream: W) -> IoWrite<W> {
+        IoWrite { upstream }
+    }
+}
 
 impl<W> Render for IoWrite<W>
 where
@@ -32,16 +40,24 @@ where
     type Error = io::Error;
 
     fn write_str(&mut self, s: &str) -> io::Result<usize> {
-        self.0.write(s.as_bytes())
+        self.upstream.write(s.as_bytes())
     }
 
     fn write_str_all(&mut self, s: &str) -> io::Result<()> {
-        self.0.write_all(s.as_bytes())
+        self.upstream.write_all(s.as_bytes())
     }
 }
 
 /// Writes to something implementing `std::fmt::Write`
-pub struct FmtWrite<W>(pub W);
+pub struct FmtWrite<W> {
+    upstream: W,
+}
+
+impl<W> FmtWrite<W> {
+    pub fn new(upstream: W) -> FmtWrite<W> {
+        FmtWrite { upstream }
+    }
+}
 
 impl<W> Render for FmtWrite<W>
 where
@@ -54,7 +70,7 @@ where
     }
 
     fn write_str_all(&mut self, s: &str) -> fmt::Result {
-        self.0.write_str(s)
+        self.upstream.write_str(s)
     }
 }
 
@@ -93,15 +109,15 @@ where
 #[cfg(feature = "termcolor")]
 pub struct TermColored<W> {
     color_stack: Vec<ColorSpec>,
-    writer: W,
+    upstream: W,
 }
 
 #[cfg(feature = "termcolor")]
 impl<W> TermColored<W> {
-    pub fn new(writer: W) -> TermColored<W> {
+    pub fn new(upstream: W) -> TermColored<W> {
         TermColored {
             color_stack: Vec::new(),
-            writer,
+            upstream,
         }
     }
 }
@@ -114,11 +130,11 @@ where
     type Error = io::Error;
 
     fn write_str(&mut self, s: &str) -> io::Result<usize> {
-        self.writer.write(s.as_bytes())
+        self.upstream.write(s.as_bytes())
     }
 
     fn write_str_all(&mut self, s: &str) -> io::Result<()> {
-        self.writer.write_all(s.as_bytes())
+        self.upstream.write_all(s.as_bytes())
     }
 }
 
@@ -129,14 +145,14 @@ where
 {
     fn push_annotation(&mut self, color: &ColorSpec) -> Result<(), Self::Error> {
         self.color_stack.push(color.clone());
-        self.writer.set_color(color)
+        self.upstream.set_color(color)
     }
 
     fn pop_annotation(&mut self) -> Result<(), Self::Error> {
         self.color_stack.pop();
         match self.color_stack.last() {
-            Some(previous) => self.writer.set_color(previous),
-            None => self.writer.reset(),
+            Some(previous) => self.upstream.set_color(previous),
+            None => self.upstream.reset(),
         }
     }
 }
