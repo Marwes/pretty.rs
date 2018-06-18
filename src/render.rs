@@ -175,7 +175,7 @@ where
     where
         W: ?Sized + Render,
     {
-        try!(out.write_str_all("\n"));
+        out.write_str_all("\n")?;
         write_spaces(ind, out)
     }
 
@@ -192,7 +192,7 @@ where
         let mut inserted = 0;
         while inserted < spaces {
             let insert = cmp::min(SPACES.len(), spaces - inserted);
-            inserted += try!(out.write_str(&SPACES[..insert]));
+            inserted += out.write_str(&SPACES[..insert])?;
         }
 
         Ok(())
@@ -301,15 +301,15 @@ where
             }
             Doc::Space => match mode {
                 Mode::Flat => {
-                    try!(write_spaces(1, out));
+                    write_spaces(1, out)?;
                 }
                 Mode::Break => {
-                    try!(write_newline(ind, out));
+                    write_newline(ind, out)?;
                     pos = ind;
                 }
             },
             Doc::Newline => {
-                try!(write_newline(ind, out));
+                write_newline(ind, out)?;
                 pos = ind;
 
                 // Since this newline caused an early break we don't know if the remaining
@@ -332,11 +332,11 @@ where
                 }
             }
             Doc::Text(ref s) => {
-                try!(out.write_str_all(s));
+                out.write_str_all(s)?;
                 pos += s.len();
             }
             Doc::Annotated(ref ann, ref doc) => {
-                try!(out.push_annotation(ann));
+                out.push_annotation(ann)?;
                 annotation_levels.push(bcmds.len());
                 bcmds.push((ind, mode, doc));
             }
@@ -344,7 +344,7 @@ where
 
         if annotation_levels.last() == Some(&bcmds.len()) {
             annotation_levels.pop();
-            try!(out.pop_annotation());
+            out.pop_annotation()?;
         }
     }
 
