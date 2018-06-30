@@ -186,7 +186,7 @@ impl<'a, T, A> Doc<'a, T, A> {
     ///
     /// The given text must not contain line breaks.
     #[inline]
-    pub fn as_string<U: ToString>(data: &U) -> Doc<'a, T, A> {
+    pub fn as_string<U: ToString>(data: U) -> Doc<'a, T, A> {
         Doc::text(data.to_string())
     }
 
@@ -448,7 +448,7 @@ pub trait DocAllocator<'a, A = ()> {
     ///
     /// The given text must not contain line breaks.
     #[inline]
-    fn as_string<U: ToString>(&'a self, data: &U) -> DocBuilder<'a, Self, A> {
+    fn as_string<U: ToString>(&'a self, data: U) -> DocBuilder<'a, Self, A> {
         self.text(data.to_string())
     }
 
