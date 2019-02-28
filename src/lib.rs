@@ -257,6 +257,7 @@ impl<'a, A> Doc<'a, BoxDoc<'a, A>, A> {
         result
     }
 
+    /// Acts as `self` when laid out on multiple lines and acts as `that` when laid out on a single line.
     #[inline]
     pub fn flat_alt<D>(self, doc: D) -> Doc<'a, BoxDoc<'a, A>, A>
     where
@@ -459,6 +460,7 @@ pub trait DocAllocator<'a, A = ()> {
         DocBuilder(self, Doc::Space)
     }
 
+    /// Acts like `space` but behaves like `nil` if grouped on a single line
     #[inline]
     fn space_(&'a self) -> DocBuilder<'a, Self, A> {
         self.newline().flat_alt(self.nil())
@@ -537,6 +539,30 @@ where
         DocBuilder(allocator, doc)
     }
 
+    /// Acts as `self` when laid out on multiple lines and acts as `that` when laid out on a single line.
+    ///
+    /// ```
+    /// use pretty::{Arena, DocAllocator};
+    ///
+    /// let arena = Arena::<()>::new();
+    /// let body = arena.space().append("x");
+    /// let doc = arena.text("let")
+    ///     .append(arena.space())
+    ///     .append("x")
+    ///     .group()
+    ///     .append(
+    ///         body.clone()
+    ///             .flat_alt(
+    ///                 arena.space()
+    ///                     .append("in")
+    ///                     .append(body)
+    ///             )
+    ///     )
+    ///     .group();
+    ///
+    /// assert_eq!(doc.1.pretty(100).to_string(), "let x in x");
+    /// assert_eq!(doc.1.pretty(8).to_string(), "let x\nx");
+    /// ```
     #[inline]
     pub fn flat_alt<E>(self, that: E) -> DocBuilder<'a, D, A>
     where
@@ -580,7 +606,7 @@ where
 }
 
 /// Newtype wrapper for `&Doc`
-#[derive(Clone, Eq, Ord, PartialEq, PartialOrd)]
+#[derive(Clone, Copy, Eq, Ord, PartialEq, PartialOrd)]
 pub struct RefDoc<'a, A: 'a>(&'a Doc<'a, RefDoc<'a, A>, A>);
 
 impl<'a, A> fmt::Debug for RefDoc<'a, A>
