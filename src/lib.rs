@@ -461,6 +461,25 @@ pub trait DocAllocator<'a, A = ()> {
     }
 
     /// Acts like `space` but behaves like `nil` if grouped on a single line
+    ///
+    /// ```
+    /// use pretty::Doc;
+    ///
+    /// let doc = Doc::<_>::group(
+    ///     Doc::text("(")
+    ///         .append(
+    ///             Doc::space_()
+    ///                 .append(Doc::text("test"))
+    ///                 .append(Doc::space())
+    ///                 .append(Doc::text("test"))
+    ///                 .nest(2),
+    ///         )
+    ///         .append(Doc::space_())
+    ///         .append(Doc::text(")")),
+    /// );
+    /// assert_eq!(doc.pretty(5).to_string(), "(\n  test\n  test\n)");
+    /// assert_eq!(doc.pretty(100).to_string(), "(test test)");
+    /// ```
     #[inline]
     fn space_(&'a self) -> DocBuilder<'a, Self, A> {
         self.newline().flat_alt(self.nil())
@@ -775,24 +794,5 @@ mod tests {
         );
 
         test!(doc, "test\ntest");
-    }
-
-    #[test]
-    fn tuple() {
-        let doc = Doc::<_>::group(
-            Doc::text("(")
-                .append(
-                    Doc::space_()
-                        .append(Doc::text("test"))
-                        .append(Doc::space())
-                        .append(Doc::text("test"))
-                        .nest(2),
-                )
-                .append(Doc::space_())
-                .append(Doc::text(")")),
-        );
-
-        test!(5, doc, "(\n  test\n  test\n)");
-        test!(100, doc, "(test test)");
     }
 }
