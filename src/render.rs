@@ -238,6 +238,9 @@ where
                             }
                             fcmds.push((ind, mode, doc));
                         }
+                        Doc::FlatAlt(_, ref doc) => {
+                            fcmds.push((ind, mode, &**doc));
+                        }
                         Doc::Group(ref doc) => {
                             fcmds.push((ind, mode, doc));
                         }
@@ -282,6 +285,14 @@ where
                 }
                 bcmds.push((ind, mode, doc));
             }
+            Doc::FlatAlt(ref b, ref f) => bcmds.push((
+                ind,
+                mode,
+                match mode {
+                    Mode::Break => b,
+                    Mode::Flat => f,
+                },
+            )),
             Doc::Group(ref doc) => match mode {
                 Mode::Flat => {
                     bcmds.push((ind, Mode::Flat, doc));

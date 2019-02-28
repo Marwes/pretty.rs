@@ -168,6 +168,7 @@ pub enum Doc<'a, T, A = ()> {
     Nil,
     Append(T, T),
     Group(T),
+    FlatAlt(T, T),
     Nest(usize, T),
     Space,
     Newline,
@@ -256,6 +257,14 @@ impl<'a, A> Doc<'a, BoxDoc<'a, A>, A> {
         result
     }
 
+    #[inline]
+    pub fn flat_alt<D>(self, doc: D) -> Doc<'a, BoxDoc<'a, A>, A>
+    where
+        D: Into<Doc<'a, BoxDoc<'a, A>, A>>,
+    {
+        DocBuilder(&BOX_ALLOCATOR, self).flat_alt(doc).into()
+    }
+
     /// Mark this document as a group.
     ///
     /// Groups are layed out on a single line if possible.  Within a group, all basic documents with
@@ -271,6 +280,11 @@ impl<'a, A> Doc<'a, BoxDoc<'a, A>, A> {
     #[inline]
     pub fn nest(self, offset: usize) -> Doc<'a, BoxDoc<'a, A>, A> {
         DocBuilder(&BOX_ALLOCATOR, self).nest(offset).into()
+    }
+
+    #[inline]
+    pub fn space_() -> Doc<'a, BoxDoc<'a, A>, A> {
+        BOX_ALLOCATOR.space_().into()
     }
 
     #[inline]
@@ -444,6 +458,11 @@ pub trait DocAllocator<'a, A = ()> {
         DocBuilder(self, Doc::Space)
     }
 
+    #[inline]
+    fn space_(&'a self) -> DocBuilder<'a, Self, A> {
+        self.newline().flat_alt(self.nil())
+    }
+
     /// Allocate a document containing the text `t.to_string()`.
     ///
     /// The given text must not contain line breaks.
@@ -517,6 +536,19 @@ where
         DocBuilder(allocator, doc)
     }
 
+    #[inline]
+    pub fn flat_alt<E>(self, that: E) -> DocBuilder<'a, D, A>
+    where
+        E: Into<Doc<'a, D::Doc, A>>,
+    {
+        let DocBuilder(allocator, this) = self;
+        let that = that.into();
+        DocBuilder(
+            allocator,
+            Doc::FlatAlt(allocator.alloc(this.into()), allocator.alloc(that)),
+        )
+    }
+
     /// Mark this document as a group.
     ///
     /// Groups are layed out on a single line if possible.  Within a group, all basic documents with
@@ -588,11 +620,13 @@ impl<'a, A> DocAllocator<'a, A> for Arena<'a, A> {
     #[inline]
     fn alloc(&'a self, doc: Doc<'a, Self::Doc, A>) -> Self::Doc {
         RefDoc(match doc {
-            // Return 'static references for unit variants to save a small
-            // amount of space in the arena
+            // Return 'static references for common variants to avoid some allocations
             Doc::Nil => &Doc::Nil,
             Doc::Space => &Doc::Space,
             Doc::Newline => &Doc::Newline,
+            Doc::FlatAlt(RefDoc(Doc::Newline), RefDoc(Doc::Nil)) => {
+                &Doc::FlatAlt(RefDoc(&Doc::Newline), RefDoc(&Doc::Nil))
+            }
             _ => Arena::alloc(self, doc),
         })
     }
@@ -714,5 +748,24 @@ mod tests {
         );
 
         test!(doc, "test\ntest");
+    }
+
+    #[test]
+    fn tuple() {
+        let doc = Doc::<_>::group(
+            Doc::text("(")
+                .append(
+                    Doc::space_()
+                        .append(Doc::text("test"))
+                        .append(Doc::space())
+                        .append(Doc::text("test"))
+                        .nest(2),
+                )
+                .append(Doc::space_())
+                .append(Doc::text(")")),
+        );
+
+        test!(5, doc, "(\n  test\n  test\n)");
+        test!(100, doc, "(test test)");
     }
 }
