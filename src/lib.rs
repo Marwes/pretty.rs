@@ -766,6 +766,13 @@ mod tests {
     }
 
     #[test]
+    fn newline_after_group_does_not_affect_it() {
+        let doc = Doc::<_>::text("x").append(Doc::space()).append("y").group();
+
+        test!(100, doc.append(Doc::newline()), "x y\n");
+    }
+
+    #[test]
     fn block() {
         let doc = Doc::<_>::group(
             Doc::text("{")

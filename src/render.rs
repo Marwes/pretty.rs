@@ -255,7 +255,7 @@ where
                                 return true;
                             }
                         },
-                        Doc::Newline => return true,
+                        Doc::Newline => return mode == Mode::Break,
                         Doc::Text(ref str) => {
                             rem -= str.len() as isize;
                         }
@@ -322,25 +322,6 @@ where
             Doc::Newline => {
                 write_newline(ind, out)?;
                 pos = ind;
-
-                // Since this newline caused an early break we don't know if the remaining
-                // documents fit the next line so recalculate if they fit
-                fcmds.clear();
-                let docs = bcmds.len()
-                    - bcmds
-                        .iter()
-                        .rev()
-                        .position(|t| t.1 == Mode::Break)
-                        .unwrap_or_else(|| bcmds.len());
-                fcmds.extend_from_slice(&bcmds[docs..]);
-                if let Some(next) = fcmds.pop() {
-                    let rem = width as isize - pos as isize;
-                    if !fitting(next, &bcmds, &mut fcmds, rem) {
-                        for &mut (_, ref mut mode, _) in &mut bcmds[docs..] {
-                            *mode = Mode::Break;
-                        }
-                    }
-                }
             }
             Doc::Text(ref s) => {
                 out.write_str_all(s)?;
