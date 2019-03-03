@@ -693,13 +693,15 @@ impl<'a, A> DocAllocator<'a, A> for BoxAllocator {
 
 #[cfg(test)]
 mod tests {
+    extern crate difference;
+
     use super::*;
 
     macro_rules! test {
         ($size:expr, $actual:expr, $expected:expr) => {
             let mut s = String::new();
             $actual.render_fmt($size, &mut s).unwrap();
-            assert_eq!(s, $expected);
+            difference::assert_diff!(&s, $expected, "\n", 0);
         };
         ($actual:expr, $expected:expr) => {
             test!(70, $actual, $expected)

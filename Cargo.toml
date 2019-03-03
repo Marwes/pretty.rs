@@ -15,6 +15,7 @@ termcolor = { version = "0.3", optional = true }
 
 [dev-dependencies]
 tempfile = "2.1.4"
+difference = "2"
 
 [[example]]
 name = "trees"
