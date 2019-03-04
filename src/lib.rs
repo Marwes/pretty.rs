@@ -693,13 +693,15 @@ impl<'a, A> DocAllocator<'a, A> for BoxAllocator {
 
 #[cfg(test)]
 mod tests {
+    extern crate difference;
+
     use super::*;
 
     macro_rules! test {
         ($size:expr, $actual:expr, $expected:expr) => {
             let mut s = String::new();
             $actual.render_fmt($size, &mut s).unwrap();
-            assert_eq!(s, $expected);
+            difference::assert_diff!(&s, $expected, "\n", 0);
         };
         ($actual:expr, $expected:expr) => {
             test!(70, $actual, $expected)
@@ -763,6 +765,13 @@ mod tests {
         );
 
         test!(6, doc, "test\ntest\ntest");
+    }
+
+    #[test]
+    fn newline_after_group_does_not_affect_it() {
+        let doc = Doc::<_>::text("x").append(Doc::space()).append("y").group();
+
+        test!(100, doc.append(Doc::newline()), "x y\n");
     }
 
     #[test]
