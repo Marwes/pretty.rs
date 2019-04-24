@@ -255,11 +255,14 @@ where
                                 return true;
                             }
                         },
-                        Doc::Newline => return mode == Mode::Break,
+                        // Newlines inside the group makes it not fit, but those outside lets it
+                        // fit on the current line
+                        Doc::Newline => return bidx < bcmds.len(),
                         Doc::Text(ref str) => {
                             rem -= str.len() as isize;
                         }
                         Doc::Annotated(_, ref doc) => fcmds.push((ind, mode, doc)),
+                        Doc::Union(_, ref r) => fcmds.push((ind, mode, r)),
                     }
                 }
             }
@@ -331,6 +334,15 @@ where
                 out.push_annotation(ann)?;
                 annotation_levels.push(bcmds.len());
                 bcmds.push((ind, mode, doc));
+            }
+            Doc::Union(ref l, ref r) => {
+                let next = (ind, Mode::Flat, &**l);
+                let rem = width as isize - pos as isize;
+                if fitting(next, &bcmds, &mut fcmds, rem) {
+                    bcmds.push((ind, mode, l));
+                } else {
+                    bcmds.push((ind, mode, r));
+                }
             }
         }
 

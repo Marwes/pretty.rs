@@ -1,7 +1,7 @@
 extern crate pretty;
 
-use pretty::{Arena, DocAllocator};
 use pretty::termcolor::{Color, ColorChoice, ColorSpec, StandardStream};
+use pretty::{Arena, DocAllocator};
 
 fn main() {
     let arena = Arena::new();
