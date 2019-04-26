@@ -443,9 +443,11 @@ where
 
 /// The `DocAllocator` trait abstracts over a type which can allocate (pointers to) `Doc`.
 pub trait DocAllocator<'a, A = ()> {
-    type Doc: Deref<Target = Doc<'a, Self::Doc, A>>;
+    type Doc;
 
     fn alloc(&'a self, Doc<'a, Self::Doc, A>) -> Self::Doc;
+
+    fn deref(&'a self, doc: &'a Self::Doc) -> &'a Doc<'a, Self::Doc, A>;
 
     /// Allocate an empty document.
     #[inline]
@@ -663,6 +665,10 @@ where
     fn alloc(&'a self, doc: Doc<'a, Self::Doc, A>) -> Self::Doc {
         (**self).alloc(doc)
     }
+
+    fn deref(&'a self, doc: &'a Self::Doc) -> &'a Doc<'a, Self::Doc, A> {
+        (**self).deref(doc)
+    }
 }
 
 impl<'a, A> DocAllocator<'a, A> for Arena<'a, A> {
@@ -681,6 +687,10 @@ impl<'a, A> DocAllocator<'a, A> for Arena<'a, A> {
             _ => Arena::alloc(self, doc),
         })
     }
+
+    fn deref(&'a self, doc: &'a Self::Doc) -> &'a Doc<'a, Self::Doc, A> {
+        doc
+    }
 }
 
 pub struct BoxAllocator;
@@ -693,6 +703,10 @@ impl<'a, A> DocAllocator<'a, A> for BoxAllocator {
     #[inline]
     fn alloc(&'a self, doc: Doc<'a, Self::Doc, A>) -> Self::Doc {
         BoxDoc::new(doc)
+    }
+
+    fn deref(&'a self, doc: &'a Self::Doc) -> &'a Doc<'a, Self::Doc, A> {
+        doc
     }
 }
 
@@ -714,6 +728,10 @@ impl<'a, 'tag, A> DocAllocator<'a, A> for SmallArena<'tag, 'a, A> {
     #[inline]
     fn alloc(&'a self, doc: Doc<'a, Self::Doc, A>) -> Self::Doc {
         IdxDoc(self.add(doc), PhantomData)
+    }
+
+    fn deref(&'a self, doc: &'a Self::Doc) -> &'a Doc<'a, Self::Doc, A> {
+        &self[doc.0]
     }
 }
 
