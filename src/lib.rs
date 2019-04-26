@@ -696,6 +696,27 @@ impl<'a, A> DocAllocator<'a, A> for BoxAllocator {
     }
 }
 
+extern crate compact_arena;
+
+use std::marker::PhantomData;
+
+pub type SmallArena<'tag, 'a, A = ()> =
+    compact_arena::SmallArena<'tag, Doc<'a, IdxDoc<'tag, 'a, A>, A>>;
+
+pub struct IdxDoc<'tag, 'a, A: 'a>(
+    compact_arena::Idx32<'tag>,
+    PhantomData<&'a Doc<'a, RefDoc<'a, A>, A>>,
+);
+
+impl<'a, 'tag, A> DocAllocator<'a, A> for SmallArena<'tag, 'a, A> {
+    type Doc = IdxDoc<'tag, 'a, A>;
+
+    #[inline]
+    fn alloc(&'a self, doc: Doc<'a, Self::Doc, A>) -> Self::Doc {
+        IdxDoc(self.add(doc), PhantomData)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     extern crate difference;

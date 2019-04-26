@@ -10,6 +10,7 @@ readme = "README.md"
 repository = "https://github.com/Marwes/pretty.rs"
 
 [dependencies]
+compact_arena = "0.3"
 typed-arena = "1.2.0"
 termcolor = { version = "0.3", optional = true }
 
