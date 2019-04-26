@@ -256,7 +256,10 @@ where
                             }
                         },
                         Doc::Newline => return mode == Mode::Break,
-                        Doc::Text(ref str) => {
+                        Doc::OwnedText(ref str) => {
+                            rem -= str.len() as isize;
+                        }
+                        Doc::BorrowedText(ref str) => {
                             rem -= str.len() as isize;
                         }
                         Doc::Annotated(_, ref doc) => fcmds.push((ind, mode, doc)),
@@ -323,7 +326,11 @@ where
                 write_newline(ind, out)?;
                 pos = ind;
             }
-            Doc::Text(ref s) => {
+            Doc::OwnedText(ref s) => {
+                out.write_str_all(s)?;
+                pos += s.len();
+            }
+            Doc::BorrowedText(ref s) => {
                 out.write_str_all(s)?;
                 pos += s.len();
             }

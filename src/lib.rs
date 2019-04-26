@@ -172,7 +172,8 @@ pub enum Doc<'a, T, A = ()> {
     Nest(usize, T),
     Space,
     Newline,
-    Text(Cow<'a, str>),
+    OwnedText(Box<str>),
+    BorrowedText(&'a str),
     Annotated(A, T),
 }
 
@@ -200,7 +201,7 @@ impl<'a, T, A> Doc<'a, T, A> {
     /// The given text, which must not contain line breaks.
     #[inline]
     pub fn text<U: Into<Cow<'a, str>>>(data: U) -> Doc<'a, T, A> {
-        Doc::Text(data.into())
+        Doc::from(data)
     }
 
     /// A space.
@@ -299,8 +300,12 @@ impl<'a, T, A, S> From<S> for Doc<'a, T, A>
 where
     S: Into<Cow<'a, str>>,
 {
+    #[inline]
     fn from(s: S) -> Doc<'a, T, A> {
-        Doc::Text(s.into())
+        match s.into() {
+            Cow::Owned(s) => Doc::OwnedText(s.into()),
+            Cow::Borrowed(s) => Doc::BorrowedText(s),
+        }
     }
 }
 
@@ -498,7 +503,7 @@ pub trait DocAllocator<'a, A = ()> {
     /// The given text must not contain line breaks.
     #[inline]
     fn text<U: Into<Cow<'a, str>>>(&'a self, data: U) -> DocBuilder<'a, Self, A> {
-        DocBuilder(self, Doc::Text(data.into()))
+        DocBuilder(self, Doc::from(data))
     }
 
     /// Allocate a document concatenating the given documents.
@@ -803,5 +808,11 @@ mod tests {
         );
 
         test!(doc, "test\ntest");
+    }
+
+    #[test]
+    fn doc_size() {
+        let s = std::mem::size_of::<Doc<BoxDoc<()>>>();
+        assert!(s <= 24, "{} is to large", s);
     }
 }
