@@ -16,6 +16,7 @@ termcolor = { version = "0.3", optional = true }
 [dev-dependencies]
 tempfile = "2.1.4"
 difference = "2"
+criterion = "0.3"
 
 [[example]]
 name = "trees"
@@ -23,6 +24,10 @@ name = "trees"
 [[example]]
 name = "colored"
 required-features = ["termcolor"]
+
+[[bench]]
+name = "trees"
+harness = false
 
 [package.metadata.docs.rs]
 features = ["termcolor"]
