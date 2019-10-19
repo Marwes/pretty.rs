@@ -261,8 +261,15 @@ where
                             return false;
                         }
                     }
+                    Doc::FlatAlt(ref b, ref f) => {
+                        doc = match mode {
+                            Mode::Break => b,
+                            Mode::Flat => f,
+                        };
+                        continue;
+                    }
+
                     Doc::Nest(_, ref next)
-                    | Doc::FlatAlt(_, ref next)
                     | Doc::Group(ref next)
                     | Doc::Annotated(_, ref next)
                     | Doc::Union(_, ref next) => {

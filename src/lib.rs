@@ -619,6 +619,9 @@ where
     /// Increase the indentation level of this document.
     #[inline]
     pub fn nest(self, offset: usize) -> DocBuilder<'a, D, A> {
+        if let Doc::Nil = self.1 {
+            return self;
+        }
         if offset == 0 {
             return self;
         }
@@ -883,7 +886,7 @@ mod tests {
         let break_all = from
             .append(Doc::space())
             .append(arg.clone())
-            .append(tuple(Doc::newline()))
+            .append(tuple(Doc::space()))
             .group()
             .nest(2);
 
