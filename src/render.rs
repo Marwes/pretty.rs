@@ -198,7 +198,6 @@ where
         Ok(())
     }
 
-    #[inline]
     fn fitting<'a, T, A>(
         next: Cmd<'a, T, A>,
         bcmds: &[Cmd<'a, T, A>],
@@ -212,63 +211,69 @@ where
         fcmds.clear(); // clear from previous calls from best
         fcmds.push(next);
 
-        while rem >= 0 {
-            match fcmds.pop() {
+        loop {
+            let mut cmd = match fcmds.pop() {
                 None => {
                     if bidx == 0 {
                         // All commands have been processed
                         return true;
                     } else {
-                        fcmds.push(bcmds[bidx - 1]);
                         bidx -= 1;
+                        bcmds[bidx]
                     }
                 }
-                Some((ind, mode, doc)) => {
-                    match *doc {
-                        Doc::Nil => {}
-                        Doc::Append(ref ldoc, ref rdoc) => {
-                            fcmds.push((ind, mode, rdoc));
-                            // Since appended documents often appear in sequence on the left side we
-                            // gain a slight performance increase by batching these pushes (avoiding
-                            // to push and directly pop `Append` documents)
-                            let mut doc = ldoc;
-                            while let Doc::Append(ref l, ref r) = **doc {
-                                fcmds.push((ind, mode, r));
-                                doc = l;
+                Some(cmd) => cmd,
+            };
+            loop {
+                let (ind, mode, doc) = cmd;
+                match *doc {
+                    Doc::Nil => {}
+                    Doc::Append(ref ldoc, ref rdoc) => {
+                        fcmds.push((ind, mode, rdoc));
+                        // Since appended documents often appear in sequence on the left side we
+                        // gain a slight performance increase by batching these pushes (avoiding
+                        // to push and directly pop `Append` documents)
+                        let mut doc = ldoc;
+                        while let Doc::Append(ref l, ref r) = **doc {
+                            fcmds.push((ind, mode, r));
+                            doc = l;
+                        }
+                        cmd = (ind, mode, doc);
+                        continue;
+                    }
+                    Doc::Nest(off, ref doc) => {
+                        cmd = (ind + off, mode, doc);
+                        continue;
+                    }
+                    Doc::Space => match mode {
+                        Mode::Flat => {
+                            rem -= 1;
+                            if rem < 0 {
+                                return false;
                             }
-                            fcmds.push((ind, mode, doc));
                         }
-                        Doc::FlatAlt(_, ref doc) => {
-                            fcmds.push((ind, mode, &**doc));
+                        Mode::Break => return true,
+                    },
+                    // Newlines inside the group makes it not fit, but those outside lets it
+                    // fit on the current line
+                    Doc::Newline => return bidx < bcmds.len(),
+                    Doc::Text(ref str) => {
+                        rem -= str.len() as isize;
+                        if rem < 0 {
+                            return false;
                         }
-                        Doc::Group(ref doc) => {
-                            fcmds.push((ind, mode, doc));
-                        }
-                        Doc::Nest(off, ref doc) => {
-                            fcmds.push((ind + off, mode, doc));
-                        }
-                        Doc::Space => match mode {
-                            Mode::Flat => {
-                                rem -= 1;
-                            }
-                            Mode::Break => {
-                                return true;
-                            }
-                        },
-                        // Newlines inside the group makes it not fit, but those outside lets it
-                        // fit on the current line
-                        Doc::Newline => return bidx < bcmds.len(),
-                        Doc::Text(ref str) => {
-                            rem -= str.len() as isize;
-                        }
-                        Doc::Annotated(_, ref doc) => fcmds.push((ind, mode, doc)),
-                        Doc::Union(_, ref r) => fcmds.push((ind, mode, r)),
+                    }
+                    Doc::FlatAlt(_, ref doc)
+                    | Doc::Group(ref doc)
+                    | Doc::Annotated(_, ref doc)
+                    | Doc::Union(_, ref doc) => {
+                        cmd = (ind, mode, doc);
+                        continue;
                     }
                 }
+                break;
             }
         }
-
-        false
     }
 
     let mut pos = 0;
@@ -276,76 +281,89 @@ where
     let mut fcmds = vec![];
     let mut annotation_levels = vec![];
 
-    while let Some((ind, mode, doc)) = bcmds.pop() {
-        match *doc {
-            Doc::Nil => {}
-            Doc::Append(ref ldoc, ref rdoc) => {
-                bcmds.push((ind, mode, rdoc));
-                let mut doc = ldoc;
-                while let Doc::Append(ref l, ref r) = **doc {
-                    bcmds.push((ind, mode, r));
-                    doc = l;
-                }
-                bcmds.push((ind, mode, doc));
-            }
-            Doc::FlatAlt(ref b, ref f) => bcmds.push((
-                ind,
-                mode,
-                match mode {
-                    Mode::Break => b,
-                    Mode::Flat => f,
-                },
-            )),
-            Doc::Group(ref doc) => match mode {
-                Mode::Flat => {
-                    bcmds.push((ind, Mode::Flat, doc));
-                }
-                Mode::Break => {
-                    let next = (ind, Mode::Flat, &**doc);
-                    let rem = width as isize - pos as isize;
-                    if fitting(next, &bcmds, &mut fcmds, rem) {
-                        bcmds.push(next);
-                    } else {
-                        bcmds.push((ind, Mode::Break, doc));
+    while let Some(mut cmd) = bcmds.pop() {
+        loop {
+            let (ind, mode, doc) = cmd;
+            match *doc {
+                Doc::Nil => {}
+                Doc::Append(ref ldoc, ref rdoc) => {
+                    bcmds.push((ind, mode, rdoc));
+                    let mut doc = ldoc;
+                    while let Doc::Append(ref l, ref r) = **doc {
+                        bcmds.push((ind, mode, r));
+                        doc = l;
                     }
+                    cmd = (ind, mode, doc);
+                    continue;
                 }
-            },
-            Doc::Nest(off, ref doc) => {
-                bcmds.push((ind + off, mode, doc));
-            }
-            Doc::Space => match mode {
-                Mode::Flat => {
-                    write_spaces(1, out)?;
+                Doc::FlatAlt(ref b, ref f) => {
+                    cmd = (
+                        ind,
+                        mode,
+                        match mode {
+                            Mode::Break => b,
+                            Mode::Flat => f,
+                        },
+                    );
+                    continue;
                 }
-                Mode::Break => {
+                Doc::Group(ref doc) => match mode {
+                    Mode::Flat => {
+                        cmd = (ind, Mode::Flat, doc);
+                        continue;
+                    }
+                    Mode::Break => {
+                        let next = (ind, Mode::Flat, &**doc);
+                        let rem = width as isize - pos as isize;
+                        cmd = if fitting(next, &bcmds, &mut fcmds, rem) {
+                            next
+                        } else {
+                            (ind, Mode::Break, doc)
+                        };
+                        continue;
+                    }
+                },
+                Doc::Nest(off, ref doc) => {
+                    cmd = (ind + off, mode, doc);
+                    continue;
+                }
+                Doc::Space => match mode {
+                    Mode::Flat => {
+                        write_spaces(1, out)?;
+                    }
+                    Mode::Break => {
+                        write_newline(ind, out)?;
+                        pos = ind;
+                    }
+                },
+                Doc::Newline => {
                     write_newline(ind, out)?;
                     pos = ind;
                 }
-            },
-            Doc::Newline => {
-                write_newline(ind, out)?;
-                pos = ind;
-            }
-            Doc::Text(ref s) => {
-                out.write_str_all(s)?;
-                pos += s.len();
-            }
-            Doc::Annotated(ref ann, ref doc) => {
-                out.push_annotation(ann)?;
-                annotation_levels.push(bcmds.len());
-                bcmds.push((ind, mode, doc));
-            }
-            Doc::Union(ref l, ref r) => {
-                let next = (ind, Mode::Flat, &**l);
-                let rem = width as isize - pos as isize;
-                if fitting(next, &bcmds, &mut fcmds, rem) {
-                    bcmds.push((ind, mode, l));
-                } else {
-                    bcmds.push((ind, mode, r));
+                Doc::Text(ref s) => {
+                    out.write_str_all(s)?;
+                    pos += s.len();
+                }
+                Doc::Annotated(ref ann, ref doc) => {
+                    out.push_annotation(ann)?;
+                    annotation_levels.push(bcmds.len());
+                    cmd = (ind, mode, doc);
+                    continue;
+                }
+                Doc::Union(ref l, ref r) => {
+                    let next = (ind, Mode::Flat, &**l);
+                    let rem = width as isize - pos as isize;
+                    cmd = if fitting(next, &bcmds, &mut fcmds, rem) {
+                        (ind, mode, l)
+                    } else {
+                        (ind, mode, r)
+                    };
+                    continue;
                 }
             }
-        }
 
+            break;
+        }
         if annotation_levels.last() == Some(&bcmds.len()) {
             annotation_levels.pop();
             out.pop_annotation()?;
