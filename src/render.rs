@@ -203,6 +203,7 @@ where
         bcmds: &[Cmd<'a, T, A>],
         fcmds: &mut Vec<&'a Doc<'a, T, A>>,
         mut rem: isize,
+        newline_fits: fn(Mode) -> bool,
     ) -> bool
     where
         T: Deref<Target = Doc<'a, T, A>>,
@@ -226,6 +227,7 @@ where
                 }
                 Some(cmd) => cmd,
             };
+
             loop {
                 match *doc {
                     Doc::Nil => {}
@@ -252,7 +254,7 @@ where
                     },
                     // Newlines inside the group makes it not fit, but those outside lets it
                     // fit on the current line
-                    Doc::Newline => return mode == Mode::Break,
+                    Doc::Newline => return newline_fits(mode),
                     Doc::Text(ref str) => {
                         rem -= str.len() as isize;
                         if rem < 0 {
@@ -311,7 +313,7 @@ where
                     }
                     Mode::Break => {
                         let rem = width as isize - pos as isize;
-                        cmd = if fitting(doc, &bcmds, &mut fcmds, rem) {
+                        cmd = if fitting(doc, &bcmds, &mut fcmds, rem, |mode| mode == Mode::Break) {
                             (ind, Mode::Flat, &**doc)
                         } else {
                             (ind, Mode::Break, doc)
@@ -348,7 +350,7 @@ where
                 }
                 Doc::Union(ref l, ref r) => {
                     let rem = width as isize - pos as isize;
-                    cmd = if fitting(l, &bcmds, &mut fcmds, rem) {
+                    cmd = if fitting(l, &bcmds, &mut fcmds, rem, |_| true) {
                         (ind, mode, l)
                     } else {
                         (ind, mode, r)
