@@ -199,9 +199,9 @@ where
     }
 
     fn fitting<'a, T, A>(
-        next: Cmd<'a, T, A>,
+        next: &'a Doc<'a, T, A>,
         bcmds: &[Cmd<'a, T, A>],
-        fcmds: &mut Vec<Cmd<'a, T, A>>,
+        fcmds: &mut Vec<&'a Doc<'a, T, A>>,
         mut rem: isize,
     ) -> bool
     where
@@ -211,38 +211,34 @@ where
         fcmds.clear(); // clear from previous calls from best
         fcmds.push(next);
 
+        let mut mode = Mode::Flat;
         loop {
-            let mut cmd = match fcmds.pop() {
+            let mut doc = match fcmds.pop() {
                 None => {
                     if bidx == 0 {
                         // All commands have been processed
                         return true;
                     } else {
                         bidx -= 1;
-                        bcmds[bidx]
+                        mode = Mode::Break;
+                        bcmds[bidx].2
                     }
                 }
                 Some(cmd) => cmd,
             };
             loop {
-                let (ind, mode, doc) = cmd;
                 match *doc {
                     Doc::Nil => {}
                     Doc::Append(ref ldoc, ref rdoc) => {
-                        fcmds.push((ind, mode, rdoc));
+                        fcmds.push(rdoc);
                         // Since appended documents often appear in sequence on the left side we
                         // gain a slight performance increase by batching these pushes (avoiding
                         // to push and directly pop `Append` documents)
-                        let mut doc = ldoc;
-                        while let Doc::Append(ref l, ref r) = **doc {
-                            fcmds.push((ind, mode, r));
+                        doc = ldoc;
+                        while let Doc::Append(ref l, ref r) = *doc {
+                            fcmds.push(r);
                             doc = l;
                         }
-                        cmd = (ind, mode, doc);
-                        continue;
-                    }
-                    Doc::Nest(off, ref doc) => {
-                        cmd = (ind + off, mode, doc);
                         continue;
                     }
                     Doc::Space => match mode {
@@ -256,18 +252,19 @@ where
                     },
                     // Newlines inside the group makes it not fit, but those outside lets it
                     // fit on the current line
-                    Doc::Newline => return bidx < bcmds.len(),
+                    Doc::Newline => return mode == Mode::Break,
                     Doc::Text(ref str) => {
                         rem -= str.len() as isize;
                         if rem < 0 {
                             return false;
                         }
                     }
-                    Doc::FlatAlt(_, ref doc)
-                    | Doc::Group(ref doc)
-                    | Doc::Annotated(_, ref doc)
-                    | Doc::Union(_, ref doc) => {
-                        cmd = (ind, mode, doc);
+                    Doc::Nest(_, ref next)
+                    | Doc::FlatAlt(_, ref next)
+                    | Doc::Group(ref next)
+                    | Doc::Annotated(_, ref next)
+                    | Doc::Union(_, ref next) => {
+                        doc = next;
                         continue;
                     }
                 }
@@ -313,10 +310,9 @@ where
                         continue;
                     }
                     Mode::Break => {
-                        let next = (ind, Mode::Flat, &**doc);
                         let rem = width as isize - pos as isize;
-                        cmd = if fitting(next, &bcmds, &mut fcmds, rem) {
-                            next
+                        cmd = if fitting(doc, &bcmds, &mut fcmds, rem) {
+                            (ind, Mode::Flat, &**doc)
                         } else {
                             (ind, Mode::Break, doc)
                         };
@@ -351,9 +347,8 @@ where
                     continue;
                 }
                 Doc::Union(ref l, ref r) => {
-                    let next = (ind, Mode::Flat, &**l);
                     let rem = width as isize - pos as isize;
-                    cmd = if fitting(next, &bcmds, &mut fcmds, rem) {
+                    cmd = if fitting(l, &bcmds, &mut fcmds, rem) {
                         (ind, mode, l)
                     } else {
                         (ind, mode, r)
