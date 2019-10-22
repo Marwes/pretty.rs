@@ -174,6 +174,7 @@ pub enum Doc<'a, T, A = ()> {
     Newline,
     Text(Cow<'a, str>),
     Annotated(A, T),
+    Union(T, T),
 }
 
 impl<'a, T, A> Doc<'a, T, A> {
@@ -292,6 +293,14 @@ impl<'a, A> Doc<'a, BoxDoc<'a, A>, A> {
     #[inline]
     pub fn annotate(self, ann: A) -> Doc<'a, BoxDoc<'a, A>, A> {
         DocBuilder(&BOX_ALLOCATOR, self).annotate(ann).into()
+    }
+
+    #[inline]
+    pub fn union<D>(self, other: D) -> Doc<'a, BoxDoc<'a, A>, A>
+    where
+        D: Into<Doc<'a, BoxDoc<'a, A>, A>>,
+    {
+        DocBuilder(&BOX_ALLOCATOR, self).union(other).into()
     }
 }
 
@@ -622,6 +631,17 @@ where
         let DocBuilder(allocator, this) = self;
         DocBuilder(allocator, Doc::Annotated(ann, allocator.alloc(this)))
     }
+
+    #[inline]
+    pub fn union<E>(self, other: E) -> DocBuilder<'a, D, A>
+    where
+        E: Into<Doc<'a, D::Doc, A>>,
+    {
+        let DocBuilder(allocator, this) = self;
+        let other = other.into();
+        let doc = Doc::Union(allocator.alloc(this), allocator.alloc(other));
+        DocBuilder(allocator, doc)
+    }
 }
 
 /// Newtype wrapper for `&Doc`
@@ -793,6 +813,25 @@ mod tests {
     }
 
     #[test]
+    fn line_comment() {
+        let doc = Doc::<_>::group(
+            Doc::text("{")
+                .append(
+                    Doc::space()
+                        .append(Doc::text("test"))
+                        .append(Doc::space())
+                        .append(Doc::text("// a").append(Doc::newline()))
+                        .append(Doc::text("test"))
+                        .nest(2),
+                )
+                .append(Doc::space())
+                .append(Doc::text("}")),
+        );
+
+        test!(14, doc, "{\n  test\n  // a\n  test\n}");
+    }
+
+    #[test]
     fn annotation_no_panic() {
         let doc = Doc::group(
             Doc::text("test")
@@ -803,5 +842,43 @@ mod tests {
         );
 
         test!(doc, "test\ntest");
+    }
+
+    #[test]
+    fn union() {
+        let arg = Doc::text("(");
+        let tuple = |space: Doc<'static, BoxDoc<'static, ()>, ()>| {
+            space
+                .append(Doc::text("x").append(",").group())
+                .append(Doc::space())
+                .append(Doc::text("1234567890").append(",").group())
+                .nest(2)
+                .append(Doc::space_())
+                .append(")")
+        };
+
+        let from = Doc::text("let")
+            .append(Doc::space())
+            .append(Doc::text("x"))
+            .append(Doc::space())
+            .append(Doc::text("="))
+            .group();
+
+        let single = Doc::space()
+            .append(arg.clone())
+            .group()
+            .append(tuple(Doc::space_()))
+            .group();
+
+        let hang = Doc::space()
+            .append(arg.clone())
+            .group()
+            .append(tuple(Doc::newline()))
+            .group();
+
+        let doc: Doc<BoxDoc<_>> = Doc::group(from.append(single.union(hang)));
+
+        test!(doc, "let x = (x, 1234567890,)");
+        test!(14, doc, "let x = (\n  x,\n  1234567890,\n)");
     }
 }

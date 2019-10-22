@@ -102,7 +102,8 @@ pub fn main() {
         let mut out = io::stdout();
         example.pretty::<_, ()>(&allocator).1.render(70, &mut out)
         // try writing to memory
-    }.and_then(|()| {
+    }
+    .and_then(|()| {
         print!("\nwriting to string then printing:\n");
         let mut mem = Vec::new();
         example
@@ -116,5 +117,5 @@ pub fn main() {
             })
         // print an error if anything failed
     })
-        .unwrap_or_else(|err| println!("error: {}", err));
+    .unwrap_or_else(|err| println!("error: {}", err));
 }
