@@ -619,6 +619,9 @@ where
     /// Increase the indentation level of this document.
     #[inline]
     pub fn nest(self, offset: usize) -> DocBuilder<'a, D, A> {
+        if let Doc::Nil = self.1 {
+            return self;
+        }
         if offset == 0 {
             return self;
         }
@@ -864,21 +867,33 @@ mod tests {
             .append(Doc::text("="))
             .group();
 
-        let single = Doc::space()
+        let single = from
+            .clone()
+            .append(Doc::space())
             .append(arg.clone())
             .group()
             .append(tuple(Doc::space_()))
             .group();
 
-        let hang = Doc::space()
+        let hang = from
+            .clone()
+            .append(Doc::space())
             .append(arg.clone())
             .group()
             .append(tuple(Doc::newline()))
             .group();
 
-        let doc: Doc<BoxDoc<_>> = Doc::group(from.append(single.union(hang)));
+        let break_all = from
+            .append(Doc::space())
+            .append(arg.clone())
+            .append(tuple(Doc::space()))
+            .group()
+            .nest(2);
+
+        let doc: Doc<BoxDoc<_>> = Doc::group(single.union(hang.union(break_all)));
 
         test!(doc, "let x = (x, 1234567890,)");
+        test!(8, doc, "let x =\n  (\n    x,\n    1234567890,\n  )");
         test!(14, doc, "let x = (\n  x,\n  1234567890,\n)");
     }
 }
