@@ -145,10 +145,7 @@
 pub extern crate termcolor;
 extern crate typed_arena;
 
-use std::borrow::Cow;
-use std::fmt;
-use std::io;
-use std::ops::Deref;
+use std::{borrow::Cow, fmt, io, ops::Deref, rc::Rc};
 #[cfg(feature = "termcolor")]
 use termcolor::{ColorSpec, WriteColor};
 
@@ -163,8 +160,8 @@ pub use self::render::{FmtWrite, IoWrite, Render, RenderAnnotated};
 ///
 /// The `T` parameter is used to abstract over pointers to `Doc`. See `RefDoc` and `BoxDoc` for how
 /// it is used
-#[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
-pub enum Doc<'a, T, A = ()> {
+#[derive(Clone)]
+pub enum Doc<'a, T: DocPtr<'a, A>, A = ()> {
     Nil,
     Append(T, T),
     Group(T),
@@ -175,9 +172,39 @@ pub enum Doc<'a, T, A = ()> {
     Text(Cow<'a, str>),
     Annotated(A, T),
     Union(T, T),
+    Column(T::ColumnFn),
 }
 
-impl<'a, T, A> Doc<'a, T, A> {
+impl<'a, T, A> fmt::Debug for Doc<'a, T, A>
+where
+    T: DocPtr<'a, A> + fmt::Debug,
+    A: fmt::Debug,
+{
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Doc::Nil => f.debug_tuple("Nil").finish(),
+            Doc::Append(ref ldoc, ref rdoc) => {
+                f.debug_tuple("Append").field(ldoc).field(rdoc).finish()
+            }
+            Doc::FlatAlt(ref x, ref y) => f.debug_tuple("FlatAlt").field(x).field(y).finish(),
+            Doc::Group(ref doc) => f.debug_tuple("Group").field(doc).finish(),
+            Doc::Nest(off, ref doc) => f.debug_tuple("Nest").field(&off).field(doc).finish(),
+            Doc::Space => f.debug_tuple("Space").finish(),
+            Doc::Newline => f.debug_tuple("Newline").finish(),
+            Doc::Text(ref s) => f.debug_tuple("Text").field(s).finish(),
+            Doc::Annotated(ref ann, ref doc) => {
+                f.debug_tuple("Annotated").field(ann).field(doc).finish()
+            }
+            Doc::Union(ref l, ref r) => f.debug_tuple("Union").field(l).field(r).finish(),
+            Doc::Column(_) => f.debug_tuple("Column(..)").finish(),
+        }
+    }
+}
+
+impl<'a, T, A> Doc<'a, T, A>
+where
+    T: DocPtr<'a, A>,
+{
     /// An empty document.
     #[inline]
     pub fn nil() -> Doc<'a, T, A> {
@@ -306,6 +333,7 @@ impl<'a, A> Doc<'a, BoxDoc<'a, A>, A> {
 
 impl<'a, T, A, S> From<S> for Doc<'a, T, A>
 where
+    T: DocPtr<'a, A>,
     S: Into<Cow<'a, str>>,
 {
     fn from(s: S) -> Doc<'a, T, A> {
@@ -313,30 +341,33 @@ where
     }
 }
 
-pub struct Pretty<'a, T, A>
+pub struct Pretty<'a, 'd, T, A>
 where
-    A: 'a,
-    T: 'a,
+    A: 'a + 'd,
+    T: DocPtr<'a, A> + 'a + 'd,
 {
-    doc: &'a Doc<'a, T, A>,
+    doc: &'d Doc<'a, T, A>,
     width: usize,
 }
 
-impl<'a, T, A> fmt::Display for Pretty<'a, T, A>
+impl<'a, T, A> fmt::Display for Pretty<'a, '_, T, A>
 where
-    T: Deref<Target = Doc<'a, T, A>>,
+    T: DocPtr<'a, A>,
 {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         self.doc.render_fmt(self.width, f)
     }
 }
 
-impl<'a, T, A> Doc<'a, T, A> {
+impl<'a, T, A> Doc<'a, T, A>
+where
+    T: DocPtr<'a, A>,
+{
     /// Writes a rendered document to a `std::io::Write` object.
     #[inline]
-    pub fn render<'b, W>(&'b self, width: usize, out: &mut W) -> io::Result<()>
+    pub fn render<W>(&self, width: usize, out: &mut W) -> io::Result<()>
     where
-        T: Deref<Target = Doc<'b, T, A>>,
+        T: Deref<Target = Doc<'a, T, A>> + 'a,
         W: ?Sized + io::Write,
     {
         self.render_raw(width, &mut IoWrite::new(out))
@@ -344,9 +375,9 @@ impl<'a, T, A> Doc<'a, T, A> {
 
     /// Writes a rendered document to a `std::fmt::Write` object.
     #[inline]
-    pub fn render_fmt<'b, W>(&'b self, width: usize, out: &mut W) -> fmt::Result
+    pub fn render_fmt<W>(&self, width: usize, out: &mut W) -> fmt::Result
     where
-        T: Deref<Target = Doc<'b, T, A>>,
+        T: Deref<Target = Doc<'a, T, A>> + 'a,
         W: ?Sized + fmt::Write,
     {
         self.render_raw(width, &mut FmtWrite::new(out))
@@ -354,9 +385,9 @@ impl<'a, T, A> Doc<'a, T, A> {
 
     /// Writes a rendered document to a `RenderAnnotated<A>` object.
     #[inline]
-    pub fn render_raw<'b, W>(&'b self, width: usize, out: &mut W) -> Result<(), W::Error>
+    pub fn render_raw<W>(&self, width: usize, out: &mut W) -> Result<(), W::Error>
     where
-        T: Deref<Target = Doc<'b, T, A>>,
+        T: Deref<Target = Doc<'a, T, A>> + 'a,
         W: ?Sized + render::RenderAnnotated<A>,
     {
         render::best(self, width, out)
@@ -372,9 +403,9 @@ impl<'a, T, A> Doc<'a, T, A> {
     /// assert_eq!(format!("{}", doc.pretty(80)), "hello world");
     /// ```
     #[inline]
-    pub fn pretty<'b>(&'b self, width: usize) -> Pretty<'b, T, A>
+    pub fn pretty<'d>(&'d self, width: usize) -> Pretty<'a, 'd, T, A>
     where
-        T: Deref<Target = Doc<'b, T, A>>,
+        T: Deref<Target = Doc<'a, T, A>> + 'a,
     {
         Pretty { doc: self, width }
     }
@@ -392,7 +423,7 @@ impl<'a, T> Doc<'a, T, ColorSpec> {
     }
 }
 
-#[derive(Clone, Eq, Ord, PartialEq, PartialOrd)]
+#[derive(Clone)]
 pub struct BoxDoc<'a, A>(Box<Doc<'a, BoxDoc<'a, A>, A>>);
 
 impl<'a, A> fmt::Debug for BoxDoc<'a, A>
@@ -420,7 +451,6 @@ impl<'a, A> Deref for BoxDoc<'a, A> {
 
 /// The `DocBuilder` type allows for convenient appending of documents even for arena allocated
 /// documents by storing the arena inline.
-#[derive(Eq, Ord, PartialEq, PartialOrd)]
 pub struct DocBuilder<'a, D, A = ()>(pub &'a D, pub Doc<'a, D::Doc, A>)
 where
     D: ?Sized + DocAllocator<'a, A> + 'a;
@@ -445,11 +475,27 @@ where
     }
 }
 
+pub trait DocPtr<'a, A>: Deref<Target = Doc<'a, Self, A>> + Sized {
+    type ColumnFn: Deref<Target = dyn Fn(usize) -> Self + 'a> + Clone;
+}
+
+impl<'a, A> DocPtr<'a, A> for BoxDoc<'a, A> {
+    type ColumnFn = std::rc::Rc<dyn Fn(usize) -> Self + 'a>;
+}
+
+impl<'a, A> DocPtr<'a, A> for RefDoc<'a, A> {
+    type ColumnFn = &'a (dyn Fn(usize) -> Self + 'a);
+}
+
 /// The `DocAllocator` trait abstracts over a type which can allocate (pointers to) `Doc`.
 pub trait DocAllocator<'a, A = ()> {
-    type Doc: Deref<Target = Doc<'a, Self::Doc, A>>;
+    type Doc: DocPtr<'a, A>;
 
     fn alloc(&'a self, Doc<'a, Self::Doc, A>) -> Self::Doc;
+    fn alloc_column_fn(
+        &'a self,
+        f: impl Fn(usize) -> Self::Doc + 'a,
+    ) -> <Self::Doc as DocPtr<'a, A>>::ColumnFn;
 
     /// Allocate an empty document.
     #[inline]
@@ -544,6 +590,23 @@ pub trait DocAllocator<'a, A = ()> {
         }
 
         result
+    }
+
+    /// Allocate a document that acts differently based on the position and page layout
+    ///
+    /// ```rust
+    /// use pretty::DocAllocator;
+    ///
+    /// let arena = pretty::Arena::<()>::new();
+    /// let doc = arena.text("prefix ")
+    ///     .append(arena.column(|l| {
+    ///         arena.text("| <- column ").append(arena.as_string(l)).into_doc()
+    ///     }));
+    /// assert_eq!(doc.1.pretty(80).to_string(), "prefix | <- column 7");
+    /// ```
+    #[inline]
+    fn column(&'a self, f: impl Fn(usize) -> Self::Doc + 'a) -> DocBuilder<'a, Self, A> {
+        DocBuilder(self, Doc::Column(self.alloc_column_fn(f)))
     }
 }
 
@@ -645,11 +708,21 @@ where
         let doc = Doc::Union(allocator.alloc(this), allocator.alloc(other));
         DocBuilder(allocator, doc)
     }
+
+    pub fn into_doc(self) -> D::Doc {
+        self.0.alloc(self.1)
+    }
 }
 
 /// Newtype wrapper for `&Doc`
-#[derive(Clone, Copy, Eq, Ord, PartialEq, PartialOrd)]
 pub struct RefDoc<'a, A: 'a>(&'a Doc<'a, RefDoc<'a, A>, A>);
+
+impl<A> Copy for RefDoc<'_, A> {}
+impl<A> Clone for RefDoc<'_, A> {
+    fn clone(&self) -> Self {
+        *self
+    }
+}
 
 impl<'a, A> fmt::Debug for RefDoc<'a, A>
 where
@@ -668,8 +741,29 @@ impl<'a, A> Deref for RefDoc<'a, A> {
     }
 }
 
+trait DropT {}
+impl<T> DropT for T {}
+
 /// An arena which can be used to allocate `Doc` values.
-pub type Arena<'a, A = ()> = typed_arena::Arena<Doc<'a, RefDoc<'a, A>, A>>;
+pub struct Arena<'a, A = ()> {
+    docs: typed_arena::Arena<Doc<'a, RefDoc<'a, A>, A>>,
+    column_fns: typed_arena::Arena<Box<dyn DropT>>,
+}
+
+impl<A> Default for Arena<'_, A> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl<A> Arena<'_, A> {
+    pub fn new() -> Self {
+        Arena {
+            docs: typed_arena::Arena::new(),
+            column_fns: Default::default(),
+        }
+    }
+}
 
 impl<'a, D, A> DocAllocator<'a, A> for &'a D
 where
@@ -680,6 +774,13 @@ where
     #[inline]
     fn alloc(&'a self, doc: Doc<'a, Self::Doc, A>) -> Self::Doc {
         (**self).alloc(doc)
+    }
+
+    fn alloc_column_fn(
+        &'a self,
+        f: impl Fn(usize) -> Self::Doc + 'a,
+    ) -> <Self::Doc as DocPtr<'a, A>>::ColumnFn {
+        (**self).alloc_column_fn(f)
     }
 }
 
@@ -696,8 +797,29 @@ impl<'a, A> DocAllocator<'a, A> for Arena<'a, A> {
             Doc::FlatAlt(RefDoc(Doc::Newline), RefDoc(Doc::Nil)) => {
                 &Doc::FlatAlt(RefDoc(&Doc::Newline), RefDoc(&Doc::Nil))
             }
-            _ => Arena::alloc(self, doc),
+            _ => self.docs.alloc(doc),
         })
+    }
+
+    fn alloc_column_fn(
+        &'a self,
+        f: impl Fn(usize) -> Self::Doc + 'a,
+    ) -> <Self::Doc as DocPtr<'a, A>>::ColumnFn {
+        let f = Box::new(f);
+        let f_ptr = &*f as *const _;
+        // Until #[may_dangle] https://github.com/rust-lang/rust/issues/34761 is stabilized (or
+        // equivalent) we need to use unsafe to cast away the lifetime of the function as we do not
+        // have any other way of asserting that the `typed_arena::Arena` destructor does not touch
+        // `'a`
+        //
+        // Since `'a` is used elsewhere in our `Arena` type we still have all the other lifetime
+        // checks in place (the other arena stores no `Drop` value which touches `'a` which lets it
+        // compile)
+        unsafe {
+            self.column_fns
+                .alloc(std::mem::transmute::<Box<dyn DropT>, Box<dyn DropT>>(f));
+            &*f_ptr
+        }
     }
 }
 
@@ -711,6 +833,12 @@ impl<'a, A> DocAllocator<'a, A> for BoxAllocator {
     #[inline]
     fn alloc(&'a self, doc: Doc<'a, Self::Doc, A>) -> Self::Doc {
         BoxDoc::new(doc)
+    }
+    fn alloc_column_fn(
+        &'a self,
+        f: impl Fn(usize) -> Self::Doc + 'a,
+    ) -> <Self::Doc as DocPtr<'a, A>>::ColumnFn {
+        Rc::new(f)
     }
 }
 
@@ -792,9 +920,10 @@ mod tests {
 
     #[test]
     fn newline_after_group_does_not_affect_it() {
-        let doc = Doc::<_>::text("x").append(Doc::space()).append("y").group();
+        let arena = Arena::<()>::new();
+        let doc = arena.text("x").append(Doc::space()).append("y").group();
 
-        test!(100, doc.append(Doc::newline()), "x y\n");
+        test!(100, doc.append(Doc::newline()).1, "x y\n");
     }
 
     #[test]

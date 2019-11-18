@@ -7,16 +7,15 @@ use std::io;
 
 use criterion::{criterion_group, criterion_main, Bencher, Criterion};
 
-use pretty::BoxAllocator;
+use pretty::{Arena, BoxAllocator};
 use trees::Tree;
-use typed_arena::Arena;
 
 #[path = "../examples/trees.rs"]
 mod trees;
 
 macro_rules! bench_trees {
     ($b:expr, $out:expr, $allocator:expr, $size:expr) => {{
-        let arena = Arena::new();
+        let arena = typed_arena::Arena::new();
         let b = $b;
         let mut out = $out;
         let size = $size;

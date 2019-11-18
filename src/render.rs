@@ -1,11 +1,10 @@
 use std::cmp;
 use std::fmt;
 use std::io;
-use std::ops::Deref;
 #[cfg(feature = "termcolor")]
 use termcolor::{ColorSpec, WriteColor};
 
-use Doc;
+use {Doc, DocPtr};
 
 /// Trait representing the operations necessary to render a document
 pub trait Render {
@@ -158,9 +157,9 @@ where
 }
 
 #[inline]
-pub fn best<'a, W, T, A>(doc: &'a Doc<'a, T, A>, width: usize, out: &mut W) -> Result<(), W::Error>
+pub fn best<'a, W, T, A>(doc: &Doc<'a, T, A>, width: usize, out: &mut W) -> Result<(), W::Error>
 where
-    T: Deref<Target = Doc<'a, T, A>>,
+    T: DocPtr<'a, A> + 'a,
     W: ?Sized + RenderAnnotated<A>,
 {
     #[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
@@ -169,7 +168,7 @@ where
         Flat,
     }
 
-    type Cmd<'a, T, A> = (usize, Mode, &'a Doc<'a, T, A>);
+    type Cmd<'d, 'a, T, A> = (usize, Mode, &'d Doc<'a, T, A>);
 
     fn write_newline<W>(ind: usize, out: &mut W) -> Result<(), W::Error>
     where
@@ -198,15 +197,17 @@ where
         Ok(())
     }
 
-    fn fitting<'a, T, A>(
-        next: &'a Doc<'a, T, A>,
-        bcmds: &[Cmd<'a, T, A>],
-        fcmds: &mut Vec<&'a Doc<'a, T, A>>,
-        mut rem: isize,
+    fn fitting<'a, 'd, T, A>(
+        temp_arena: &'d typed_arena::Arena<T>,
+        next: &'d Doc<'a, T, A>,
+        bcmds: &[Cmd<'d, 'a, T, A>],
+        fcmds: &mut Vec<&'d Doc<'a, T, A>>,
+        mut pos: usize,
+        width: usize,
         newline_fits: fn(Mode) -> bool,
     ) -> bool
     where
-        T: Deref<Target = Doc<'a, T, A>>,
+        T: DocPtr<'a, A>,
     {
         let mut bidx = bcmds.len();
         fcmds.clear(); // clear from previous calls from best
@@ -245,8 +246,8 @@ where
                     }
                     Doc::Space => match mode {
                         Mode::Flat => {
-                            rem -= 1;
-                            if rem < 0 {
+                            pos += 1;
+                            if pos > width {
                                 return false;
                             }
                         }
@@ -256,8 +257,8 @@ where
                     // fit on the current line
                     Doc::Newline => return newline_fits(mode),
                     Doc::Text(ref str) => {
-                        rem -= str.len() as isize;
-                        if rem < 0 {
+                        pos += str.len();
+                        if pos > width {
                             return false;
                         }
                     }
@@ -269,6 +270,10 @@ where
                         continue;
                     }
 
+                    Doc::Column(ref f) => {
+                        doc = temp_arena.alloc(f(pos));
+                        continue;
+                    }
                     Doc::Nest(_, ref next)
                     | Doc::Group(ref next)
                     | Doc::Annotated(_, ref next)
@@ -281,6 +286,8 @@ where
             }
         }
     }
+
+    let temp_arena = typed_arena::Arena::new();
 
     let mut pos = 0;
     let mut bcmds = vec![(0, Mode::Break, doc)];
@@ -319,8 +326,9 @@ where
                         continue;
                     }
                     Mode::Break => {
-                        let rem = width as isize - pos as isize;
-                        cmd = if fitting(doc, &bcmds, &mut fcmds, rem, |mode| mode == Mode::Break) {
+                        cmd = if fitting(&temp_arena, doc, &bcmds, &mut fcmds, pos, width, |mode| {
+                            mode == Mode::Break
+                        }) {
                             (ind, Mode::Flat, &**doc)
                         } else {
                             (ind, Mode::Break, doc)
@@ -356,12 +364,15 @@ where
                     continue;
                 }
                 Doc::Union(ref l, ref r) => {
-                    let rem = width as isize - pos as isize;
-                    cmd = if fitting(l, &bcmds, &mut fcmds, rem, |_| true) {
+                    cmd = if fitting(&temp_arena, l, &bcmds, &mut fcmds, pos, width, |_| true) {
                         (ind, mode, l)
                     } else {
                         (ind, mode, r)
                     };
+                    continue;
+                }
+                Doc::Column(ref f) => {
+                    cmd = (ind, mode, temp_arena.alloc(f(pos)));
                     continue;
                 }
             }
