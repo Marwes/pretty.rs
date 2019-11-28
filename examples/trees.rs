@@ -1,5 +1,3 @@
-
-
 use pretty::{BoxAllocator, DocAllocator, DocBuilder};
 use std::io;
 use std::str;
@@ -27,8 +25,8 @@ impl<'a> Forest<'a> {
         } else {
             allocator
                 .text("[")
-                .append(allocator.newline().append(self.pretty(allocator)).nest(2))
-                .append(allocator.newline())
+                .append(allocator.hardline().append(self.pretty(allocator)).nest(2))
+                .append(allocator.hardline())
                 .append(allocator.text("]"))
         }
     }
@@ -40,7 +38,7 @@ impl<'a> Forest<'a> {
         A: Clone,
     {
         let forest = self.0;
-        let separator = allocator.text(",").append(allocator.newline());
+        let separator = allocator.text(",").append(allocator.hardline());
         allocator.intersperse(
             forest.into_iter().map(|tree| tree.pretty(allocator)),
             separator,

@@ -52,7 +52,7 @@
 //!             Atom(ref x) => Doc::as_string(x),
 //!             List(ref xs) =>
 //!                 Doc::text("(")
-//!                     .append(Doc::intersperse(xs.into_iter().map(|x| x.to_doc()), Doc::space()).nest(1).group())
+//!                     .append(Doc::intersperse(xs.into_iter().map(|x| x.to_doc()), Doc::line()).nest(1).group())
 //!                     .append(Doc::text(")"))
 //!         }
 //!     }
@@ -77,7 +77,7 @@
 //! #             Atom(ref x) => Doc::as_string(x),
 //! #             List(ref xs) =>
 //! #                 Doc::text("(")
-//! #                     .append(Doc::intersperse(xs.into_iter().map(|x| x.to_doc()), Doc::space()).nest(1).group())
+//! #                     .append(Doc::intersperse(xs.into_iter().map(|x| x.to_doc()), Doc::line()).nest(1).group())
 //! #                     .append(Doc::text(")"))
 //! #         }
 //! #     }
@@ -109,7 +109,7 @@
 //! #             Atom(ref x) => Doc::as_string(x),
 //! #             List(ref xs) =>
 //! #                 Doc::text("(")
-//! #                     .append(Doc::intersperse(xs.into_iter().map(|x| x.to_doc()), Doc::space()).nest(1).group())
+//! #                     .append(Doc::intersperse(xs.into_iter().map(|x| x.to_doc()), Doc::line()).nest(1).group())
 //! #                     .append(Doc::text(")"))
 //! #         }
 //! #     }
@@ -167,8 +167,7 @@ pub enum Doc<'a, T: DocPtr<'a, A>, A = ()> {
     Group(T),
     FlatAlt(T, T),
     Nest(isize, T),
-    Space,
-    Newline,
+    Line,
     Text(Cow<'a, str>),
     Annotated(A, T),
     Union(T, T),
@@ -190,8 +189,7 @@ where
             Doc::FlatAlt(ref x, ref y) => f.debug_tuple("FlatAlt").field(x).field(y).finish(),
             Doc::Group(ref doc) => f.debug_tuple("Group").field(doc).finish(),
             Doc::Nest(off, ref doc) => f.debug_tuple("Nest").field(&off).field(doc).finish(),
-            Doc::Space => f.debug_tuple("Space").finish(),
-            Doc::Newline => f.debug_tuple("Newline").finish(),
+            Doc::Line => f.debug_tuple("Line").finish(),
             Doc::Text(ref s) => f.debug_tuple("Text").field(s).finish(),
             Doc::Annotated(ref ann, ref doc) => {
                 f.debug_tuple("Annotated").field(ann).field(doc).finish()
@@ -221,22 +219,16 @@ where
         Doc::text(data.to_string())
     }
 
-    /// A single newline.
+    /// A single hardline.
     #[inline]
-    pub fn newline() -> Doc<'a, T, A> {
-        Doc::Newline
+    pub fn hardline() -> Doc<'a, T, A> {
+        Doc::Line
     }
 
     /// The given text, which must not contain line breaks.
     #[inline]
     pub fn text<U: Into<Cow<'a, str>>>(data: U) -> Doc<'a, T, A> {
         Doc::Text(data.into())
-    }
-
-    /// A space.
-    #[inline]
-    pub fn space() -> Doc<'a, T, A> {
-        Doc::Space
     }
 }
 
@@ -313,10 +305,21 @@ impl<'a, A> Doc<'a, BoxDoc<'a, A>, A> {
         DocBuilder(&BOX_ALLOCATOR, self).nest(offset).into()
     }
 
-    /// Acts like `space` but behaves like `nil` if grouped on a single line
     #[inline]
-    pub fn space_() -> Doc<'a, BoxDoc<'a, A>, A> {
-        BOX_ALLOCATOR.space_().into()
+    pub fn space() -> Doc<'a, BoxDoc<'a, A>, A> {
+        BOX_ALLOCATOR.space().1
+    }
+
+    /// A line acts like a `\n` but behaves like `space` if it is grouped on a single line.
+    #[inline]
+    pub fn line() -> Doc<'a, BoxDoc<'a, A>, A> {
+        Doc::hardline().flat_alt(Doc::space())
+    }
+
+    /// Acts like `line` but behaves like `nil` if grouped on a single line
+    #[inline]
+    pub fn line_() -> Doc<'a, BoxDoc<'a, A>, A> {
+        BOX_ALLOCATOR.line_().into()
     }
 
     #[inline]
@@ -400,7 +403,7 @@ where
     /// ```
     /// use pretty::Doc;
     /// let doc = Doc::<_>::group(
-    ///     Doc::text("hello").append(Doc::space()).append(Doc::text("world"))
+    ///     Doc::text("hello").append(Doc::line()).append(Doc::text("world"))
     /// );
     /// assert_eq!(format!("{}", doc.pretty(80)), "hello world");
     /// ```
@@ -518,19 +521,24 @@ where
         DocBuilder(self, Doc::Nil)
     }
 
-    /// Allocate a single newline.
+    /// Allocate a single hardline.
     #[inline]
-    fn newline(&'a self) -> DocBuilder<'a, Self, A> {
-        DocBuilder(self, Doc::Newline)
+    fn hardline(&'a self) -> DocBuilder<'a, Self, A> {
+        DocBuilder(self, Doc::Line)
     }
 
-    /// Allocate a single space.
     #[inline]
     fn space(&'a self) -> DocBuilder<'a, Self, A> {
-        DocBuilder(self, Doc::Space)
+        self.text(" ")
     }
 
-    /// Acts like `space` but behaves like `nil` if grouped on a single line
+    /// A line acts like a `\n` but behaves like `space` if it is grouped on a single line.
+    #[inline]
+    fn line(&'a self) -> DocBuilder<'a, Self, A> {
+        self.hardline().flat_alt(self.space())
+    }
+
+    /// Acts like `line` but behaves like `nil` if grouped on a single line
     ///
     /// ```
     /// use pretty::Doc;
@@ -538,21 +546,21 @@ where
     /// let doc = Doc::<_>::group(
     ///     Doc::text("(")
     ///         .append(
-    ///             Doc::space_()
+    ///             Doc::line_()
     ///                 .append(Doc::text("test"))
-    ///                 .append(Doc::space())
+    ///                 .append(Doc::line())
     ///                 .append(Doc::text("test"))
     ///                 .nest(2),
     ///         )
-    ///         .append(Doc::space_())
+    ///         .append(Doc::line_())
     ///         .append(Doc::text(")")),
     /// );
     /// assert_eq!(doc.pretty(5).to_string(), "(\n  test\n  test\n)");
     /// assert_eq!(doc.pretty(100).to_string(), "(test test)");
     /// ```
     #[inline]
-    fn space_(&'a self) -> DocBuilder<'a, Self, A> {
-        self.newline().flat_alt(self.nil())
+    fn line_(&'a self) -> DocBuilder<'a, Self, A> {
+        self.hardline().flat_alt(self.nil())
     }
 
     /// Allocate a document containing the text `t.to_string()`.
@@ -649,7 +657,7 @@ where
         Self::Doc: Clone,
         A: Clone,
     {
-        self.intersperse(text.split(char::is_whitespace), self.space().group())
+        self.intersperse(text.split(char::is_whitespace), self.line().group())
     }
 }
 
@@ -679,15 +687,15 @@ where
     /// use pretty::{Arena, DocAllocator};
     ///
     /// let arena = Arena::<()>::new();
-    /// let body = arena.space().append("x");
+    /// let body = arena.line().append("x");
     /// let doc = arena.text("let")
-    ///     .append(arena.space())
+    ///     .append(arena.line())
     ///     .append("x")
     ///     .group()
     ///     .append(
     ///         body.clone()
     ///             .flat_alt(
-    ///                 arena.space()
+    ///                 arena.line()
     ///                     .append("in")
     ///                     .append(body)
     ///             )
@@ -759,7 +767,7 @@ where
     ///
     /// let arena = pretty::Arena::<()>::new();
     /// let doc = arena.text("lorem").append(arena.text(" "))
-    ///     .append(arena.intersperse(["ipsum", "dolor"].iter().cloned(), arena.space_()).align());
+    ///     .append(arena.intersperse(["ipsum", "dolor"].iter().cloned(), arena.line_()).align());
     /// assert_eq!(doc.1.pretty(80).to_string(), "lorem ipsum\n      dolor");
     /// ```
     #[inline]
@@ -953,10 +961,14 @@ impl<'a, A> DocAllocator<'a, A> for Arena<'a, A> {
         RefDoc(match doc {
             // Return 'static references for common variants to avoid some allocations
             Doc::Nil => &Doc::Nil,
-            Doc::Space => &Doc::Space,
-            Doc::Newline => &Doc::Newline,
-            Doc::FlatAlt(RefDoc(Doc::Newline), RefDoc(Doc::Nil)) => {
-                &Doc::FlatAlt(RefDoc(&Doc::Newline), RefDoc(&Doc::Nil))
+            Doc::Line => &Doc::Line,
+            // line()
+            Doc::FlatAlt(RefDoc(Doc::Line), RefDoc(Doc::Text(Cow::Borrowed(" ")))) => {
+                &Doc::FlatAlt(RefDoc(&Doc::Line), RefDoc(&Doc::Text(Cow::Borrowed(" "))))
+            }
+            // line_()
+            Doc::FlatAlt(RefDoc(Doc::Line), RefDoc(Doc::Nil)) => {
+                &Doc::FlatAlt(RefDoc(&Doc::Line), RefDoc(&Doc::Nil))
             }
             _ => self.docs.alloc(doc),
         })
@@ -1054,7 +1066,7 @@ mod tests {
     fn box_doc_inference() {
         let doc = Doc::<_>::group(
             Doc::text("test")
-                .append(Doc::space())
+                .append(Doc::line())
                 .append(Doc::text("test")),
         );
 
@@ -1064,11 +1076,7 @@ mod tests {
     #[test]
     fn newline_in_text() {
         let doc = Doc::<_>::group(
-            Doc::text("test").append(
-                Doc::space()
-                    .append(Doc::text("\"test\n     test\""))
-                    .nest(4),
-            ),
+            Doc::text("test").append(Doc::line().append(Doc::text("\"test\n     test\"")).nest(4)),
         );
 
         test!(5, doc, "test\n    \"test\n     test\"");
@@ -1078,7 +1086,7 @@ mod tests {
     fn forced_newline() {
         let doc = Doc::<_>::group(
             Doc::text("test")
-                .append(Doc::newline())
+                .append(Doc::hardline())
                 .append(Doc::text("test")),
         );
 
@@ -1087,21 +1095,21 @@ mod tests {
 
     #[test]
     fn space_do_not_reset_pos() {
-        let doc = Doc::<_>::group(Doc::text("test").append(Doc::space()))
+        let doc = Doc::<_>::group(Doc::text("test").append(Doc::line()))
             .append(Doc::text("test"))
-            .append(Doc::group(Doc::space()).append(Doc::text("test")));
+            .append(Doc::group(Doc::line()).append(Doc::text("test")));
 
         test!(9, doc, "test test\ntest");
     }
 
-    // Tests that the `Doc::newline()` does not cause the rest of document to think that it fits on
-    // a single line but instead breaks on the `Doc::space()` to fit with 6 columns
+    // Tests that the `Doc::hardline()` does not cause the rest of document to think that it fits on
+    // a single line but instead breaks on the `Doc::line()` to fit with 6 columns
     #[test]
     fn newline_does_not_cause_next_line_to_be_to_long() {
         let doc = Doc::<_>::group(
-            Doc::text("test").append(Doc::newline()).append(
+            Doc::text("test").append(Doc::hardline()).append(
                 Doc::text("test")
-                    .append(Doc::space())
+                    .append(Doc::line())
                     .append(Doc::text("test")),
             ),
         );
@@ -1112,9 +1120,9 @@ mod tests {
     #[test]
     fn newline_after_group_does_not_affect_it() {
         let arena = Arena::<()>::new();
-        let doc = arena.text("x").append(Doc::space()).append("y").group();
+        let doc = arena.text("x").append(arena.line()).append("y").group();
 
-        test!(100, doc.append(Doc::newline()).1, "x y\n");
+        test!(100, doc.append(Doc::hardline()).1, "x y\n");
     }
 
     #[test]
@@ -1122,13 +1130,13 @@ mod tests {
         let doc = Doc::<_>::group(
             Doc::text("{")
                 .append(
-                    Doc::space()
+                    Doc::line()
                         .append(Doc::text("test"))
-                        .append(Doc::space())
+                        .append(Doc::line())
                         .append(Doc::text("test"))
                         .nest(2),
                 )
-                .append(Doc::space())
+                .append(Doc::line())
                 .append(Doc::text("}")),
         );
 
@@ -1140,14 +1148,14 @@ mod tests {
         let doc = Doc::<_>::group(
             Doc::text("{")
                 .append(
-                    Doc::space()
+                    Doc::line()
                         .append(Doc::text("test"))
-                        .append(Doc::space())
-                        .append(Doc::text("// a").append(Doc::newline()))
+                        .append(Doc::line())
+                        .append(Doc::text("// a").append(Doc::hardline()))
                         .append(Doc::text("test"))
                         .nest(2),
                 )
-                .append(Doc::space())
+                .append(Doc::line())
                 .append(Doc::text("}")),
         );
 
@@ -1159,7 +1167,7 @@ mod tests {
         let doc = Doc::group(
             Doc::text("test")
                 .annotate(())
-                .append(Doc::newline())
+                .append(Doc::hardline())
                 .annotate(())
                 .append(Doc::text("test")),
         );
@@ -1170,43 +1178,42 @@ mod tests {
     #[test]
     fn union() {
         let arg = Doc::text("(");
-        let tuple = |space: Doc<'static, BoxDoc<'static, ()>, ()>| {
-            space
-                .append(Doc::text("x").append(",").group())
-                .append(Doc::space())
+        let tuple = |line: Doc<'static, BoxDoc<'static, ()>, ()>| {
+            line.append(Doc::text("x").append(",").group())
+                .append(Doc::line())
                 .append(Doc::text("1234567890").append(",").group())
                 .nest(2)
-                .append(Doc::space_())
+                .append(Doc::line_())
                 .append(")")
         };
 
         let from = Doc::text("let")
-            .append(Doc::space())
+            .append(Doc::line())
             .append(Doc::text("x"))
-            .append(Doc::space())
+            .append(Doc::line())
             .append(Doc::text("="))
             .group();
 
         let single = from
             .clone()
-            .append(Doc::space())
+            .append(Doc::line())
             .append(arg.clone())
             .group()
-            .append(tuple(Doc::space_()))
+            .append(tuple(Doc::line_()))
             .group();
 
         let hang = from
             .clone()
-            .append(Doc::space())
+            .append(Doc::line())
             .append(arg.clone())
             .group()
-            .append(tuple(Doc::newline()))
+            .append(tuple(Doc::hardline()))
             .group();
 
         let break_all = from
-            .append(Doc::space())
+            .append(Doc::line())
             .append(arg.clone())
-            .append(tuple(Doc::space()))
+            .append(tuple(Doc::line()))
             .group()
             .nest(2);
 
@@ -1221,7 +1228,7 @@ mod tests {
     fn usize_max_value() {
         let doc = Doc::<_>::group(
             Doc::text("test")
-                .append(Doc::space())
+                .append(Doc::line())
                 .append(Doc::text("test")),
         );
 

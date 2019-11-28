@@ -246,18 +246,9 @@ where
                         }
                         continue;
                     }
-                    Doc::Space => match mode {
-                        Mode::Flat => {
-                            pos += 1;
-                            if pos > width {
-                                return false;
-                            }
-                        }
-                        Mode::Break => return true,
-                    },
                     // Newlines inside the group makes it not fit, but those outside lets it
                     // fit on the current line
-                    Doc::Newline => return newline_fits(mode),
+                    Doc::Line => return newline_fits(mode),
                     Doc::Text(ref str) => {
                         pos += str.len();
                         if pos > width {
@@ -353,16 +344,7 @@ where
                     cmd = ((ind as isize).saturating_add(off) as usize, mode, doc);
                     continue;
                 }
-                Doc::Space => match mode {
-                    Mode::Flat => {
-                        write_spaces(1, out)?;
-                    }
-                    Mode::Break => {
-                        write_newline(ind, out)?;
-                        pos = ind;
-                    }
-                },
-                Doc::Newline => {
+                Doc::Line => {
                     write_newline(ind, out)?;
                     pos = ind;
                 }
