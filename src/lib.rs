@@ -143,7 +143,7 @@
 
 #[cfg(feature = "termcolor")]
 pub extern crate termcolor;
-extern crate typed_arena;
+use typed_arena;
 
 use std::{borrow::Cow, fmt, io, ops::Deref, rc::Rc};
 #[cfg(feature = "termcolor")]
@@ -180,7 +180,7 @@ where
     T: DocPtr<'a, A> + fmt::Debug,
     A: fmt::Debug,
 {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Doc::Nil => f.debug_tuple("Nil").finish(),
             Doc::Append(ref ldoc, ref rdoc) => {
@@ -343,8 +343,8 @@ where
 
 pub struct Pretty<'a, 'd, T, A>
 where
-    A: 'a + 'd,
-    T: DocPtr<'a, A> + 'a + 'd,
+    A: 'a,
+    T: DocPtr<'a, A> + 'a,
 {
     doc: &'d Doc<'a, T, A>,
     width: usize,
@@ -354,7 +354,7 @@ impl<'a, T, A> fmt::Display for Pretty<'a, '_, T, A>
 where
     T: DocPtr<'a, A>,
 {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         self.doc.render_fmt(self.width, f)
     }
 }
@@ -430,7 +430,7 @@ impl<'a, A> fmt::Debug for BoxDoc<'a, A>
 where
     A: fmt::Debug,
 {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         self.0.fmt(f)
     }
 }
@@ -453,7 +453,7 @@ impl<'a, A> Deref for BoxDoc<'a, A> {
 /// documents by storing the arena inline.
 pub struct DocBuilder<'a, D, A = ()>(pub &'a D, pub Doc<'a, D::Doc, A>)
 where
-    D: ?Sized + DocAllocator<'a, A> + 'a;
+    D: ?Sized + DocAllocator<'a, A>;
 
 impl<'a, A, D> Clone for DocBuilder<'a, D, A>
 where
@@ -491,7 +491,7 @@ impl<'a, A> DocPtr<'a, A> for RefDoc<'a, A> {
 pub trait DocAllocator<'a, A = ()> {
     type Doc: DocPtr<'a, A>;
 
-    fn alloc(&'a self, Doc<'a, Self::Doc, A>) -> Self::Doc;
+    fn alloc(&'a self, doc: Doc<'a, Self::Doc, A>) -> Self::Doc;
     fn alloc_column_fn(
         &'a self,
         f: impl Fn(usize) -> Self::Doc + 'a,
@@ -715,7 +715,7 @@ where
 }
 
 /// Newtype wrapper for `&Doc`
-pub struct RefDoc<'a, A: 'a>(&'a Doc<'a, RefDoc<'a, A>, A>);
+pub struct RefDoc<'a, A>(&'a Doc<'a, RefDoc<'a, A>, A>);
 
 impl<A> Copy for RefDoc<'_, A> {}
 impl<A> Clone for RefDoc<'_, A> {
@@ -728,7 +728,7 @@ impl<'a, A> fmt::Debug for RefDoc<'a, A>
 where
     A: fmt::Debug,
 {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         self.0.fmt(f)
     }
 }
@@ -844,7 +844,7 @@ impl<'a, A> DocAllocator<'a, A> for BoxAllocator {
 
 #[cfg(test)]
 mod tests {
-    extern crate difference;
+    use difference;
 
     use super::*;
 
@@ -1019,7 +1019,7 @@ mod tests {
             .group()
             .nest(2);
 
-        let doc: Doc<BoxDoc<_>> = Doc::group(single.union(hang.union(break_all)));
+        let doc: Doc<'_, BoxDoc<'_, _>> = Doc::group(single.union(hang.union(break_all)));
 
         test!(doc, "let x = (x, 1234567890,)");
         test!(8, doc, "let x =\n  (\n    x,\n    1234567890,\n  )");
@@ -1035,6 +1035,5 @@ mod tests {
         );
 
         test!(usize::max_value(), doc, "test test");
-
     }
 }

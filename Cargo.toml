@@ -8,6 +8,7 @@ keywords = ["console", "functional", "pretty-printing"]
 license = "MIT"
 readme = "README.md"
 repository = "https://github.com/Marwes/pretty.rs"
+edition = "2018"
 
 [package.metadata.docs.rs]
 features = ["termcolor"]

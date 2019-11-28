@@ -1,4 +1,4 @@
-extern crate pretty;
+
 
 use pretty::{BoxAllocator, DocAllocator, DocBuilder};
 use std::io;

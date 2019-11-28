@@ -4,7 +4,7 @@ use std::io;
 #[cfg(feature = "termcolor")]
 use termcolor::{ColorSpec, WriteColor};
 
-use {Doc, DocPtr};
+use crate::{Doc, DocPtr};
 
 /// Trait representing the operations necessary to render a document
 pub trait Render {
