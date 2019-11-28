@@ -204,6 +204,7 @@ where
         fcmds: &mut Vec<&'d Doc<'a, T, A>>,
         mut pos: usize,
         width: usize,
+        ind: usize,
         newline_fits: fn(Mode) -> bool,
     ) -> bool
     where
@@ -274,6 +275,10 @@ where
                         doc = temp_arena.alloc(f(pos));
                         continue;
                     }
+                    Doc::Nesting(ref f) => {
+                        doc = temp_arena.alloc(f(ind));
+                        continue;
+                    }
                     Doc::Nest(_, ref next)
                     | Doc::Group(ref next)
                     | Doc::Annotated(_, ref next)
@@ -326,9 +331,16 @@ where
                         continue;
                     }
                     Mode::Break => {
-                        cmd = if fitting(&temp_arena, doc, &bcmds, &mut fcmds, pos, width, |mode| {
-                            mode == Mode::Break
-                        }) {
+                        cmd = if fitting(
+                            &temp_arena,
+                            doc,
+                            &bcmds,
+                            &mut fcmds,
+                            pos,
+                            width,
+                            ind,
+                            |mode| mode == Mode::Break,
+                        ) {
                             (ind, Mode::Flat, &**doc)
                         } else {
                             (ind, Mode::Break, doc)
@@ -364,7 +376,9 @@ where
                     continue;
                 }
                 Doc::Union(ref l, ref r) => {
-                    cmd = if fitting(&temp_arena, l, &bcmds, &mut fcmds, pos, width, |_| true) {
+                    cmd = if fitting(&temp_arena, l, &bcmds, &mut fcmds, pos, width, ind, |_| {
+                        true
+                    }) {
                         (ind, mode, l)
                     } else {
                         (ind, mode, r)
@@ -373,6 +387,10 @@ where
                 }
                 Doc::Column(ref f) => {
                     cmd = (ind, mode, temp_arena.alloc(f(pos)));
+                    continue;
+                }
+                Doc::Nesting(ref f) => {
+                    cmd = (ind, mode, temp_arena.alloc(f(ind)));
                     continue;
                 }
             }

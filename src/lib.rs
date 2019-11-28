@@ -173,6 +173,7 @@ pub enum Doc<'a, T: DocPtr<'a, A>, A = ()> {
     Annotated(A, T),
     Union(T, T),
     Column(T::ColumnFn),
+    Nesting(T::ColumnFn),
 }
 
 impl<'a, T, A> fmt::Debug for Doc<'a, T, A>
@@ -197,6 +198,7 @@ where
             }
             Doc::Union(ref l, ref r) => f.debug_tuple("Union").field(l).field(r).finish(),
             Doc::Column(_) => f.debug_tuple("Column(..)").finish(),
+            Doc::Nesting(_) => f.debug_tuple("Nesting(..)").finish(),
         }
     }
 }
@@ -621,6 +623,23 @@ where
     fn column(&'a self, f: impl Fn(usize) -> Self::Doc + 'a) -> DocBuilder<'a, Self, A> {
         DocBuilder(self, Doc::Column(self.alloc_column_fn(f)))
     }
+
+    /// Allocate a document that acts differently based on the current nesting level
+    ///
+    /// ```rust
+    /// use pretty::DocAllocator;
+    ///
+    /// let arena = pretty::Arena::<()>::new();
+    /// let doc = arena.text("prefix ")
+    ///     .append(arena.nesting(|l| {
+    ///         arena.text("[Nested: ").append(arena.as_string(l)).append("]").into_doc()
+    ///     }).nest(4));
+    /// assert_eq!(doc.1.pretty(80).to_string(), "prefix [Nested: 4]");
+    /// ```
+    #[inline]
+    fn nesting(&'a self, f: impl Fn(usize) -> Self::Doc + 'a) -> DocBuilder<'a, Self, A> {
+        DocBuilder(self, Doc::Nesting(self.alloc_column_fn(f)))
+    }
 }
 
 impl<'a, 's, D, A> DocBuilder<'a, D, A>
@@ -722,6 +741,30 @@ where
         DocBuilder(allocator, doc)
     }
 
+    /// Lays out `self` so with the nesting level set to the current column
+    ///
+    /// ```rust
+    /// use pretty::DocAllocator;
+    ///
+    /// let arena = pretty::Arena::<()>::new();
+    /// let doc = arena.text("lorem").append(arena.text(" "))
+    ///     .append(arena.intersperse(["ipsum", "dolor"].iter().cloned(), arena.space()).align());
+    /// assert_eq!(doc.1.pretty(80).to_string(), "lorem ipsum\n      dolor");
+    /// ```
+    #[inline]
+    pub fn align(self) -> DocBuilder<'a, D, A>
+    where
+        DocBuilder<'a, D, A>: Clone,
+    {
+        let allocator = self.0;
+        allocator.column(move |col| {
+            let self_ = self.clone();
+            allocator
+                .nesting(move |nest| self_.clone().nest(col - nest).into_doc())
+                .into_doc()
+        })
+    }
+
     /// Lays out `self` and provides the column width of it available to `f`
     ///
     /// ```rust
@@ -735,13 +778,17 @@ where
     /// assert_eq!(doc.1.pretty(80).to_string(), "prefix | <- column 7");
     /// ```
     #[inline]
-    pub fn width(self, f: impl Fn(isize) -> D::Doc + 'a) -> DocBuilder<'a, D, A> {
-        let allocator = self.0;
+    pub fn width(self, f: impl Fn(isize) -> D::Doc + 'a) -> DocBuilder<'a, D, A>
+    where
+        Doc<'a, D::Doc, A>: Clone,
+    {
+        let DocBuilder(allocator, this) = self;
         let f = allocator.alloc_width_fn(f);
         allocator.column(move |start| {
             let f = f.clone();
-            allocator
-                .column(move |end| f(end as isize - start as isize))
+
+            DocBuilder(allocator, this.clone())
+                .append(allocator.column(move |end| f(end as isize - start as isize)))
                 .into_doc()
         })
     }
