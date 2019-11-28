@@ -145,7 +145,7 @@
 pub extern crate termcolor;
 use typed_arena;
 
-use std::{borrow::Cow, fmt, io, ops::Deref, rc::Rc};
+use std::{borrow::Cow, convert::TryInto, fmt, io, ops::Deref, rc::Rc};
 #[cfg(feature = "termcolor")]
 use termcolor::{ColorSpec, WriteColor};
 
@@ -166,7 +166,7 @@ pub enum Doc<'a, T: DocPtr<'a, A>, A = ()> {
     Append(T, T),
     Group(T),
     FlatAlt(T, T),
-    Nest(usize, T),
+    Nest(isize, T),
     Space,
     Newline,
     Text(Cow<'a, str>),
@@ -309,7 +309,7 @@ impl<'a, A> Doc<'a, BoxDoc<'a, A>, A> {
 
     /// Increase the indentation level of this document.
     #[inline]
-    pub fn nest(self, offset: usize) -> Doc<'a, BoxDoc<'a, A>, A> {
+    pub fn nest(self, offset: isize) -> Doc<'a, BoxDoc<'a, A>, A> {
         DocBuilder(&BOX_ALLOCATOR, self).nest(offset).into()
     }
 
@@ -640,6 +640,17 @@ where
     fn nesting(&'a self, f: impl Fn(usize) -> Self::Doc + 'a) -> DocBuilder<'a, Self, A> {
         DocBuilder(self, Doc::Nesting(self.alloc_column_fn(f)))
     }
+
+    /// Reflows `text` inserting `softline` in place of any whitespace
+    #[inline]
+    fn reflow(&'a self, text: &'a str) -> DocBuilder<'a, Self, A>
+    where
+        Self: Sized,
+        Self::Doc: Clone,
+        A: Clone,
+    {
+        self.intersperse(text.split(char::is_whitespace), self.space().group())
+    }
 }
 
 impl<'a, 's, D, A> DocBuilder<'a, D, A>
@@ -713,7 +724,7 @@ where
 
     /// Increase the indentation level of this document.
     #[inline]
-    pub fn nest(self, offset: usize) -> DocBuilder<'a, D, A> {
+    pub fn nest(self, offset: isize) -> DocBuilder<'a, D, A> {
         if let Doc::Nil = self.1 {
             return self;
         }
@@ -748,7 +759,7 @@ where
     ///
     /// let arena = pretty::Arena::<()>::new();
     /// let doc = arena.text("lorem").append(arena.text(" "))
-    ///     .append(arena.intersperse(["ipsum", "dolor"].iter().cloned(), arena.space()).align());
+    ///     .append(arena.intersperse(["ipsum", "dolor"].iter().cloned(), arena.space_()).align());
     /// assert_eq!(doc.1.pretty(80).to_string(), "lorem ipsum\n      dolor");
     /// ```
     #[inline]
@@ -760,9 +771,67 @@ where
         allocator.column(move |col| {
             let self_ = self.clone();
             allocator
-                .nesting(move |nest| self_.clone().nest(col - nest).into_doc())
+                .nesting(move |nest| self_.clone().nest(col as isize - nest as isize).into_doc())
                 .into_doc()
         })
+    }
+
+    /// Lays out `self` with a nesting level set to the current level plus `adjust`.
+    ///
+    /// ```rust
+    /// use pretty::DocAllocator;
+    ///
+    /// let arena = pretty::Arena::<()>::new();
+    /// let doc = arena.text("prefix").append(arena.text(" "))
+    ///     .append(arena.reflow("Indenting these words with nest").hang(4));
+    /// assert_eq!(
+    ///     doc.1.pretty(24).to_string(),
+    ///     "prefix Indenting these\n           words with\n           nest",
+    /// );
+    /// ```
+    #[inline]
+    pub fn hang(self, adjust: isize) -> DocBuilder<'a, D, A>
+    where
+        DocBuilder<'a, D, A>: Clone,
+    {
+        self.nest(adjust).align()
+    }
+
+    /// Indents `self` by `adjust` spaces from the current cursor position
+    ///
+    /// ```rust
+    /// use pretty::DocAllocator;
+    ///
+    /// let arena = pretty::Arena::<()>::new();
+    /// let doc = arena.text("prefix").append(arena.text(" "))
+    ///     .append(arena.reflow("The indent function indents these words!").indent(4));
+    /// assert_eq!(
+    ///     doc.1.pretty(24).to_string(),
+    /// "
+    /// prefix     The indent
+    ///            function
+    ///            indents these
+    ///            words!".trim_start(),
+    /// );
+    /// ```
+    #[inline]
+    pub fn indent(self, adjust: usize) -> DocBuilder<'a, D, A>
+    where
+        DocBuilder<'a, D, A>: Clone,
+    {
+        let spaces = {
+            use crate::render::SPACES;
+            let DocBuilder(allocator, _) = self;
+            let mut doc = allocator.nil();
+            let mut remaining = adjust;
+            while remaining != 0 {
+                let i = SPACES.len().min(remaining);
+                remaining -= i;
+                doc = doc.append(allocator.text(&SPACES[..i]))
+            }
+            doc
+        };
+        spaces.append(self).hang(adjust.try_into().unwrap())
     }
 
     /// Lays out `self` and provides the column width of it available to `f`

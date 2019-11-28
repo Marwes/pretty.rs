@@ -156,6 +156,13 @@ where
     }
 }
 
+macro_rules! make_spaces {
+            () => { "" };
+            ($s: tt $($t: tt)*) => { concat!("          ", make_spaces!($($t)*)) };
+        }
+
+pub(crate) const SPACES: &str = make_spaces!(,,,,,,,,,,);
+
 #[inline]
 pub fn best<'a, W, T, A>(doc: &Doc<'a, T, A>, width: usize, out: &mut W) -> Result<(), W::Error>
 where
@@ -182,12 +189,6 @@ where
     where
         W: ?Sized + Render,
     {
-        macro_rules! make_spaces {
-            () => { "" };
-            ($s: tt $($t: tt)*) => { concat!("          ", make_spaces!($($t)*)) };
-        }
-
-        const SPACES: &str = make_spaces!(,,,,,,,,,,);
         let mut inserted = 0;
         while inserted < spaces {
             let insert = cmp::min(SPACES.len(), spaces - inserted);
@@ -349,7 +350,7 @@ where
                     }
                 },
                 Doc::Nest(off, ref doc) => {
-                    cmd = (ind + off, mode, doc);
+                    cmd = ((ind as isize).saturating_add(off) as usize, mode, doc);
                     continue;
                 }
                 Doc::Space => match mode {
