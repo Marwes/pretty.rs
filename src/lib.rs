@@ -475,20 +475,29 @@ where
     }
 }
 
-pub trait DocPtr<'a, A>: Deref<Target = Doc<'a, Self, A>> + Sized {
-    type ColumnFn: Deref<Target = dyn Fn(usize) -> Self + 'a> + Clone;
+pub trait DocPtr<'a, A>: Deref<Target = Doc<'a, Self, A>> + Sized
+where
+    A: 'a,
+{
+    type ColumnFn: Deref<Target = dyn Fn(usize) -> Self + 'a> + Clone + 'a;
+    type WidthFn: Deref<Target = dyn Fn(isize) -> Self + 'a> + Clone + 'a;
 }
 
 impl<'a, A> DocPtr<'a, A> for BoxDoc<'a, A> {
     type ColumnFn = std::rc::Rc<dyn Fn(usize) -> Self + 'a>;
+    type WidthFn = std::rc::Rc<dyn Fn(isize) -> Self + 'a>;
 }
 
 impl<'a, A> DocPtr<'a, A> for RefDoc<'a, A> {
     type ColumnFn = &'a (dyn Fn(usize) -> Self + 'a);
+    type WidthFn = &'a (dyn Fn(isize) -> Self + 'a);
 }
 
 /// The `DocAllocator` trait abstracts over a type which can allocate (pointers to) `Doc`.
-pub trait DocAllocator<'a, A = ()> {
+pub trait DocAllocator<'a, A = ()>
+where
+    A: 'a,
+{
     type Doc: DocPtr<'a, A>;
 
     fn alloc(&'a self, doc: Doc<'a, Self::Doc, A>) -> Self::Doc;
@@ -496,6 +505,10 @@ pub trait DocAllocator<'a, A = ()> {
         &'a self,
         f: impl Fn(usize) -> Self::Doc + 'a,
     ) -> <Self::Doc as DocPtr<'a, A>>::ColumnFn;
+    fn alloc_width_fn(
+        &'a self,
+        f: impl Fn(isize) -> Self::Doc + 'a,
+    ) -> <Self::Doc as DocPtr<'a, A>>::WidthFn;
 
     /// Allocate an empty document.
     #[inline]
@@ -709,6 +722,30 @@ where
         DocBuilder(allocator, doc)
     }
 
+    /// Lays out `self` and provides the column width of it available to `f`
+    ///
+    /// ```rust
+    /// use pretty::DocAllocator;
+    ///
+    /// let arena = pretty::Arena::<()>::new();
+    /// let doc = arena.text("prefix ")
+    ///     .append(arena.column(|l| {
+    ///         arena.text("| <- column ").append(arena.as_string(l)).into_doc()
+    ///     }));
+    /// assert_eq!(doc.1.pretty(80).to_string(), "prefix | <- column 7");
+    /// ```
+    #[inline]
+    pub fn width(self, f: impl Fn(isize) -> D::Doc + 'a) -> DocBuilder<'a, D, A> {
+        let allocator = self.0;
+        let f = allocator.alloc_width_fn(f);
+        allocator.column(move |start| {
+            let f = f.clone();
+            allocator
+                .column(move |end| f(end as isize - start as isize))
+                .into_doc()
+        })
+    }
+
     pub fn into_doc(self) -> D::Doc {
         self.0.alloc(self.1)
     }
@@ -768,6 +805,7 @@ impl<A> Arena<'_, A> {
 impl<'a, D, A> DocAllocator<'a, A> for &'a D
 where
     D: ?Sized + DocAllocator<'a, A>,
+    A: 'a,
 {
     type Doc = D::Doc;
 
@@ -781,6 +819,13 @@ where
         f: impl Fn(usize) -> Self::Doc + 'a,
     ) -> <Self::Doc as DocPtr<'a, A>>::ColumnFn {
         (**self).alloc_column_fn(f)
+    }
+
+    fn alloc_width_fn(
+        &'a self,
+        f: impl Fn(isize) -> Self::Doc + 'a,
+    ) -> <Self::Doc as DocPtr<'a, A>>::WidthFn {
+        (**self).alloc_width_fn(f)
     }
 }
 
@@ -821,13 +866,37 @@ impl<'a, A> DocAllocator<'a, A> for Arena<'a, A> {
             &*f_ptr
         }
     }
+
+    fn alloc_width_fn(
+        &'a self,
+        f: impl Fn(isize) -> Self::Doc + 'a,
+    ) -> <Self::Doc as DocPtr<'a, A>>::WidthFn {
+        let f = Box::new(f);
+        let f_ptr = &*f as *const _;
+        // Until #[may_dangle] https://github.com/rust-lang/rust/issues/34761 is stabilized (or
+        // equivalent) we need to use unsafe to cast away the lifetime of the function as we do not
+        // have any other way of asserting that the `typed_arena::Arena` destructor does not touch
+        // `'a`
+        //
+        // Since `'a` is used elsewhere in our `Arena` type we still have all the other lifetime
+        // checks in place (the other arena stores no `Drop` value which touches `'a` which lets it
+        // compile)
+        unsafe {
+            self.column_fns
+                .alloc(std::mem::transmute::<Box<dyn DropT>, Box<dyn DropT>>(f));
+            &*f_ptr
+        }
+    }
 }
 
 pub struct BoxAllocator;
 
 static BOX_ALLOCATOR: BoxAllocator = BoxAllocator;
 
-impl<'a, A> DocAllocator<'a, A> for BoxAllocator {
+impl<'a, A> DocAllocator<'a, A> for BoxAllocator
+where
+    A: 'a,
+{
     type Doc = BoxDoc<'a, A>;
 
     #[inline]
@@ -838,6 +907,12 @@ impl<'a, A> DocAllocator<'a, A> for BoxAllocator {
         &'a self,
         f: impl Fn(usize) -> Self::Doc + 'a,
     ) -> <Self::Doc as DocPtr<'a, A>>::ColumnFn {
+        Rc::new(f)
+    }
+    fn alloc_width_fn(
+        &'a self,
+        f: impl Fn(isize) -> Self::Doc + 'a,
+    ) -> <Self::Doc as DocPtr<'a, A>>::WidthFn {
         Rc::new(f)
     }
 }
