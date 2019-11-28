@@ -563,6 +563,18 @@ where
         self.hardline().flat_alt(self.nil())
     }
 
+    /// A `softline` acts like `space` if the document fits the page, otherwise like `line`
+    #[inline]
+    fn softline(&'a self) -> DocBuilder<'a, Self, A> {
+        self.line().group()
+    }
+
+    /// A `softline_` acts like `nil` if the document fits the page, otherwise like `line_`
+    #[inline]
+    fn softline_(&'a self) -> DocBuilder<'a, Self, A> {
+        self.line_().group()
+    }
+
     /// Allocate a document containing the text `t.to_string()`.
     ///
     /// The given text must not contain line breaks.
