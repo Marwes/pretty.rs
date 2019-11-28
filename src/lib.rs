@@ -1025,4 +1025,16 @@ mod tests {
         test!(8, doc, "let x =\n  (\n    x,\n    1234567890,\n  )");
         test!(14, doc, "let x = (\n  x,\n  1234567890,\n)");
     }
+
+    #[test]
+    fn usize_max_value() {
+        let doc = Doc::<_>::group(
+            Doc::text("test")
+                .append(Doc::space())
+                .append(Doc::text("test")),
+        );
+
+        test!(usize::max_value(), doc, "test test");
+
+    }
 }
