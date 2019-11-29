@@ -366,13 +366,12 @@ where
 
 impl<'a, T, A> Doc<'a, T, A>
 where
-    T: DocPtr<'a, A>,
+    T: DocPtr<'a, A> + 'a,
 {
     /// Writes a rendered document to a `std::io::Write` object.
     #[inline]
     pub fn render<W>(&self, width: usize, out: &mut W) -> io::Result<()>
     where
-        T: Deref<Target = Doc<'a, T, A>> + 'a,
         W: ?Sized + io::Write,
     {
         self.render_raw(width, &mut IoWrite::new(out))
@@ -382,7 +381,6 @@ where
     #[inline]
     pub fn render_fmt<W>(&self, width: usize, out: &mut W) -> fmt::Result
     where
-        T: Deref<Target = Doc<'a, T, A>> + 'a,
         W: ?Sized + fmt::Write,
     {
         self.render_raw(width, &mut FmtWrite::new(out))
@@ -392,7 +390,6 @@ where
     #[inline]
     pub fn render_raw<W>(&self, width: usize, out: &mut W) -> Result<(), W::Error>
     where
-        T: Deref<Target = Doc<'a, T, A>> + 'a,
         W: ?Sized + render::RenderAnnotated<A>,
     {
         render::best(self, width, out)
@@ -408,20 +405,19 @@ where
     /// assert_eq!(format!("{}", doc.pretty(80)), "hello world");
     /// ```
     #[inline]
-    pub fn pretty<'d>(&'d self, width: usize) -> Pretty<'a, 'd, T, A>
-    where
-        T: Deref<Target = Doc<'a, T, A>> + 'a,
-    {
+    pub fn pretty<'d>(&'d self, width: usize) -> Pretty<'a, 'd, T, A> {
         Pretty { doc: self, width }
     }
 }
 
 #[cfg(feature = "termcolor")]
-impl<'a, T> Doc<'a, T, ColorSpec> {
+impl<'a, T> Doc<'a, T, ColorSpec>
+where
+    T: DocPtr<'a, ColorSpec> + 'a,
+{
     #[inline]
-    pub fn render_colored<'b, W>(&'b self, width: usize, out: W) -> io::Result<()>
+    pub fn render_colored<W>(&self, width: usize, out: W) -> io::Result<()>
     where
-        T: Deref<Target = Doc<'b, T, ColorSpec>>,
         W: WriteColor,
     {
         render::best(self, width, &mut TermColored::new(out))
