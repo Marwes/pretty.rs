@@ -878,6 +878,41 @@ where
         })
     }
 
+    /// Puts `self` between `before` and `after`
+    #[inline]
+    pub fn enclose<E, F>(self, before: E, after: F) -> DocBuilder<'a, D, A>
+    where
+        E: Into<Doc<'a, D::Doc, A>>,
+        F: Into<Doc<'a, D::Doc, A>>,
+    {
+        let DocBuilder(allocator, _) = self;
+        DocBuilder(allocator, before.into())
+            .append(self)
+            .append(after)
+    }
+
+    pub fn single_quotes(self) -> DocBuilder<'a, D, A> {
+        self.enclose("'", "'")
+    }
+
+    pub fn double_quotes(self) -> DocBuilder<'a, D, A> {
+        self.enclose("\"", "\"")
+    }
+    pub fn parens(self) -> DocBuilder<'a, D, A> {
+        self.enclose("(", ")")
+    }
+
+    pub fn angles(self) -> DocBuilder<'a, D, A> {
+        self.enclose("<", ">")
+    }
+    pub fn braces(self) -> DocBuilder<'a, D, A> {
+        self.enclose("{", "}")
+    }
+
+    pub fn brackets(self) -> DocBuilder<'a, D, A> {
+        self.enclose("[", "]")
+    }
+
     pub fn into_doc(self) -> D::Doc {
         self.0.alloc(self.1)
     }
