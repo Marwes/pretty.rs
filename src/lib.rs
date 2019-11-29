@@ -23,7 +23,6 @@
 //! symbolic expression children.
 //!
 //! ```rust
-//! # extern crate pretty;
 //! # use pretty::*;
 //! enum SExp {
 //!     Atom(u32),
@@ -38,7 +37,6 @@
 //! [nested]() and [grouped](), allowing them to be laid out in a single line as appropriate.
 //!
 //! ```rust
-//! # extern crate pretty;
 //! # use pretty::*;
 //! # enum SExp {
 //! #     Atom(u32),
@@ -63,7 +61,6 @@
 //! Next, we convert the [Doc](enum.Doc.html) to a plain old string.
 //!
 //! ```rust
-//! # extern crate pretty;
 //! # use pretty::*;
 //! # enum SExp {
 //! #     Atom(u32),
@@ -95,7 +92,6 @@
 //! And finally we can test that the nesting and grouping behaves as we expected.
 //!
 //! ```rust
-//! # extern crate pretty;
 //! # use pretty::*;
 //! # enum SExp {
 //! #     Atom(u32),
@@ -143,7 +139,6 @@
 
 #[cfg(feature = "termcolor")]
 pub extern crate termcolor;
-use typed_arena;
 
 use std::{borrow::Cow, convert::TryInto, fmt, io, ops::Deref, rc::Rc};
 #[cfg(feature = "termcolor")]

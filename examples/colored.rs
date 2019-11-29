@@ -1,5 +1,3 @@
-extern crate pretty;
-
 use pretty::termcolor::{Color, ColorChoice, ColorSpec, StandardStream};
 use pretty::{Arena, DocAllocator};
 

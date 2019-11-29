@@ -1,14 +1,9 @@
-
-
-use tempfile;
-use typed_arena;
-
 use std::io;
 
 use criterion::{criterion_group, criterion_main, Bencher, Criterion};
 
-use pretty::{Arena, BoxAllocator};
 use crate::trees::Tree;
+use pretty::{Arena, BoxAllocator};
 
 #[path = "../examples/trees.rs"]
 mod trees;
