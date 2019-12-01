@@ -45,13 +45,13 @@
 //! # use SExp::*;
 //! impl SExp {
 //!     /// Return a pretty printed format of self.
-//!     pub fn to_doc(&self) -> Doc<BoxDoc<()>> {
+//!     pub fn to_doc(&self) -> RcDoc<()> {
 //!         match *self {
-//!             Atom(ref x) => Doc::as_string(x),
+//!             Atom(ref x) => RcDoc::as_string(x),
 //!             List(ref xs) =>
-//!                 Doc::text("(")
-//!                     .append(Doc::intersperse(xs.into_iter().map(|x| x.to_doc()), Doc::line()).nest(1).group())
-//!                     .append(Doc::text(")"))
+//!                 RcDoc::text("(")
+//!                     .append(RcDoc::intersperse(xs.into_iter().map(|x| x.to_doc()), Doc::line()).nest(1).group())
+//!                     .append(RcDoc::text(")"))
 //!         }
 //!     }
 //! }
@@ -69,13 +69,13 @@
 //! # use SExp::*;
 //! # impl SExp {
 //! #     /// Return a pretty printed format of self.
-//! #     pub fn to_doc(&self) -> Doc<BoxDoc<()>> {
+//! #     pub fn to_doc(&self) -> BoxDoc<()> {
 //! #         match *self {
-//! #             Atom(ref x) => Doc::as_string(x),
+//! #             Atom(ref x) => BoxDoc::as_string(x),
 //! #             List(ref xs) =>
-//! #                 Doc::text("(")
-//! #                     .append(Doc::intersperse(xs.into_iter().map(|x| x.to_doc()), Doc::line()).nest(1).group())
-//! #                     .append(Doc::text(")"))
+//! #                 BoxDoc::text("(")
+//! #                     .append(BoxDoc::intersperse(xs.into_iter().map(|x| x.to_doc()), Doc::line()).nest(1).group())
+//! #                     .append(BoxDoc::text(")"))
 //! #         }
 //! #     }
 //! # }
@@ -100,13 +100,13 @@
 //! # use SExp::*;
 //! # impl SExp {
 //! #     /// Return a pretty printed format of self.
-//! #     pub fn to_doc(&self) -> Doc<BoxDoc<()>> {
+//! #     pub fn to_doc(&self) -> BoxDoc<()> {
 //! #         match *self {
-//! #             Atom(ref x) => Doc::as_string(x),
+//! #             Atom(ref x) => BoxDoc::as_string(x),
 //! #             List(ref xs) =>
-//! #                 Doc::text("(")
-//! #                     .append(Doc::intersperse(xs.into_iter().map(|x| x.to_doc()), Doc::line()).nest(1).group())
-//! #                     .append(Doc::text(")"))
+//! #                 BoxDoc::text("(")
+//! #                     .append(BoxDoc::intersperse(xs.into_iter().map(|x| x.to_doc()), Doc::line()).nest(1).group())
+//! #                     .append(BoxDoc::text(")"))
 //! #         }
 //! #     }
 //! # }
@@ -196,41 +196,10 @@ where
     }
 }
 
-impl<'a, T, A> Doc<'a, T, A>
-where
-    T: DocPtr<'a, A>,
-{
-    /// An empty document.
-    #[inline]
-    pub fn nil() -> Doc<'a, T, A> {
-        Doc::Nil
-    }
-
-    /// The text `t.to_string()`.
-    ///
-    /// The given text must not contain line breaks.
-    #[inline]
-    pub fn as_string<U: ToString>(data: U) -> Doc<'a, T, A> {
-        Doc::text(data.to_string())
-    }
-
-    /// A single hardline.
-    #[inline]
-    pub fn hardline() -> Doc<'a, T, A> {
-        Doc::Line
-    }
-
-    /// The given text, which must not contain line breaks.
-    #[inline]
-    pub fn text<U: Into<Cow<'a, str>>>(data: U) -> Doc<'a, T, A> {
-        Doc::Text(data.into())
-    }
-}
-
 macro_rules! impl_doc {
     ($name: ident, $allocator: ident) => {
         #[derive(Clone)]
-        pub struct $name<'a, A>(Box<Doc<'a, $name<'a, A>, A>>);
+        pub struct $name<'a, A = ()>(Box<Doc<'a, $name<'a, A>, A>>);
 
         impl<'a, A> fmt::Debug for $name<'a, A>
         where
@@ -242,8 +211,14 @@ macro_rules! impl_doc {
         }
 
         impl<'a, A> $name<'a, A> {
-            fn new(doc: Doc<'a, $name<'a, A>, A>) -> $name<'a, A> {
+            pub fn new(doc: Doc<'a, $name<'a, A>, A>) -> $name<'a, A> {
                 $name(Box::new(doc))
+            }
+        }
+
+        impl<'a, A> From<Doc<'a, Self, A>> for $name<'a, A> {
+            fn from(doc: Doc<'a, $name<'a, A>, A>) -> $name<'a, A> {
+                $name::new(doc)
             }
         }
 
@@ -288,15 +263,180 @@ macro_rules! impl_doc {
             type Allocator = $allocator;
             const ALLOCATOR: &'static Self::Allocator = &$allocator;
         }
+
+        impl_doc_methods!($name ('a, A) where () where ());
+
+        impl<'a, A> $name<'a, A> {
+            /// Append the given document after this document.
+            #[inline]
+            pub fn append<D>(self, that: D) -> Self
+            where
+                D: Into<BuildDoc<'a, Self, A>>,
+            {
+                DocBuilder(&$allocator, self.into()).append(that).into_doc()
+            }
+
+            /// A single document concatenating all the given documents.
+            #[inline]
+            pub fn concat<I>(docs: I) -> Self
+            where
+                I: IntoIterator,
+                I::Item: Into<BuildDoc<'a, Self, A>>,
+            {
+                $allocator.concat(docs).into_doc()
+            }
+
+            /// A single document interspersing the given separator `S` between the given documents.  For
+            /// example, if the documents are `[A, B, C, ..., Z]`, this yields `[A, S, B, S, C, S, ..., S, Z]`.
+            ///
+            /// Compare [the `intersperse` method from the `itertools` crate](https://docs.rs/itertools/0.5.9/itertools/trait.Itertools.html#method.intersperse).
+            #[inline]
+            pub fn intersperse<I, S>(docs: I, separator: S) -> Self
+            where
+                I: IntoIterator,
+                I::Item: Into<BuildDoc<'a, Self, A>>,
+                S: Into<BuildDoc<'a, Self, A>> + Clone,
+                A: Clone,
+            {
+                $allocator.intersperse(docs, separator).into_doc()
+            }
+
+            /// Acts as `self` when laid out on multiple lines and acts as `that` when laid out on a single line.
+            #[inline]
+            pub fn flat_alt<D>(self, doc: D) -> Self
+            where
+                D: Into<BuildDoc<'a, Self, A>>,
+            {
+                DocBuilder(&$allocator, self.into())
+                    .flat_alt(doc)
+                    .into_doc()
+            }
+
+            /// Mark this document as a group.
+            ///
+            /// Groups are layed out on a single line if possible.  Within a group, all basic documents with
+            /// several possible layouts are assigned the same layout, that is, they are all layed out
+            /// horizontally and combined into a one single line, or they are each layed out on their own
+            /// line.
+            #[inline]
+            pub fn group(self) -> Self {
+                DocBuilder(&$allocator, self.into()).group().into_doc()
+            }
+
+            /// Increase the indentation level of this document.
+            #[inline]
+            pub fn nest(self, offset: isize) -> Self {
+                DocBuilder(&$allocator, self.into()).nest(offset).into_doc()
+            }
+
+            #[inline]
+            pub fn annotate(self, ann: A) -> Self {
+                DocBuilder(&$allocator, self.into())
+                    .annotate(ann)
+                    .into_doc()
+            }
+
+            #[inline]
+            pub fn union<D>(self, other: D) -> Self
+            where
+                D: Into<BuildDoc<'a, Self, A>>,
+            {
+                DocBuilder(&$allocator, self.into()).union(other).into_doc()
+            }
+        }
+    };
+}
+
+macro_rules! impl_doc_methods {
+    ($name: ident ( $($params: tt)* ) where ( $($where_: tt)* ) where ( $($where_2: tt)* )) => {
+        impl< $($params)* > $name< $($params)* >
+            where $($where_)*
+        {
+            /// An empty document.
+            #[inline]
+            pub fn nil() -> Self {
+                Doc::Nil.into()
+            }
+
+            /// The text `t.to_string()`.
+            ///
+            /// The given text must not contain line breaks.
+            #[inline]
+            pub fn as_string<U: ToString>(data: U) -> Self {
+                Self::text(data.to_string())
+            }
+
+            /// A single hardline.
+            #[inline]
+            pub fn hardline() -> Self {
+                Doc::Line.into()
+            }
+
+            /// The given text, which must not contain line breaks.
+            #[inline]
+            pub fn text<U: Into<Cow<'a, str>>>(data: U) -> Self {
+                Doc::Text(data.into()).into()
+            }
+
+            #[inline]
+            pub fn space() -> Self {
+                Doc::Text(" ".into()).into()
+            }
+        }
+
+        impl< $($params)* > $name< $($params)* >
+            where $($where_2)*
+        {
+            /// A line acts like a `\n` but behaves like `space` if it is grouped on a single line.
+            #[inline]
+            pub fn line() -> Self {
+                Self::hardline().flat_alt(Self::space()).into()
+            }
+
+            /// Acts like `line` but behaves like `nil` if grouped on a single line
+            #[inline]
+            pub fn line_() -> Self {
+                Self::hardline().flat_alt(Self::nil()).into()
+            }
+        }
     };
 }
 
 impl_doc!(BoxDoc, BoxAllocator);
 impl_doc!(RcDoc, RcAllocator);
 
+impl_doc_methods!(Doc ('a, D, A) where (D: DocPtr<'a, A>) where (D: StaticDoc<'a, A>));
+impl_doc_methods!(BuildDoc ('a, D, A) where (D: DocPtr<'a, A>) where (D: StaticDoc<'a, A>));
+
 pub struct BoxAllocator;
 
 pub struct RcAllocator;
+
+impl<'a, T, A> BuildDoc<'a, T, A>
+where
+    T: StaticDoc<'a, A>,
+{
+    fn flat_alt<D>(self, doc: D) -> Self
+    where
+        D: Into<BuildDoc<'a, T, A>>,
+    {
+        DocBuilder(&T::ALLOCATOR, self.into()).flat_alt(doc).1
+    }
+}
+
+impl<'a, T, A> Doc<'a, T, A>
+where
+    T: StaticDoc<'a, A>,
+{
+    fn flat_alt<D>(self, doc: D) -> Self
+    where
+        D: Into<BuildDoc<'a, T, A>>,
+    {
+        DocBuilder(&T::ALLOCATOR, self.into())
+            .flat_alt(doc)
+            .into_plain_doc()
+    }
+}
 
 pub trait StaticDoc<'a, A>: DocPtr<'a, A>
 where
@@ -304,113 +444,6 @@ where
 {
     type Allocator: DocAllocator<'a, A, Doc = Self> + 'static;
     const ALLOCATOR: &'static Self::Allocator;
-}
-
-impl<'a, T, A> Doc<'a, T, A>
-where
-    T: StaticDoc<'a, A> + 'a,
-{
-    /// Append the given document after this document.
-    #[inline]
-    pub fn append<D>(self, that: D) -> Doc<'a, T, A>
-    where
-        D: Into<Doc<'a, T, A>>,
-    {
-        DocBuilder(&T::ALLOCATOR, self).append(that).into()
-    }
-
-    /// A single document concatenating all the given documents.
-    #[inline]
-    pub fn concat<I>(docs: I) -> Doc<'a, T, A>
-    where
-        I: IntoIterator,
-        I::Item: Into<Doc<'a, T, A>>,
-    {
-        docs.into_iter().fold(Doc::nil(), |a, b| a.append(b))
-    }
-
-    /// A single document interspersing the given separator `S` between the given documents.  For
-    /// example, if the documents are `[A, B, C, ..., Z]`, this yields `[A, S, B, S, C, S, ..., S, Z]`.
-    ///
-    /// Compare [the `intersperse` method from the `itertools` crate](https://docs.rs/itertools/0.5.9/itertools/trait.Itertools.html#method.intersperse).
-    #[inline]
-    pub fn intersperse<I, S>(docs: I, separator: S) -> Doc<'a, T, A>
-    where
-        I: IntoIterator,
-        I::Item: Into<Doc<'a, T, A>>,
-        S: Into<Doc<'a, T, A>> + Clone,
-        A: Clone,
-    {
-        let mut result = Doc::nil();
-        let mut iter = docs.into_iter();
-
-        if let Some(first) = iter.next() {
-            result = result.append(first);
-
-            for doc in iter {
-                result = result.append(separator.clone());
-                result = result.append(doc);
-            }
-        }
-
-        result
-    }
-
-    /// Acts as `self` when laid out on multiple lines and acts as `that` when laid out on a single line.
-    #[inline]
-    pub fn flat_alt<D>(self, doc: D) -> Doc<'a, T, A>
-    where
-        D: Into<Doc<'a, T, A>>,
-    {
-        DocBuilder(&T::ALLOCATOR, self).flat_alt(doc).into()
-    }
-
-    /// Mark this document as a group.
-    ///
-    /// Groups are layed out on a single line if possible.  Within a group, all basic documents with
-    /// several possible layouts are assigned the same layout, that is, they are all layed out
-    /// horizontally and combined into a one single line, or they are each layed out on their own
-    /// line.
-    #[inline]
-    pub fn group(self) -> Doc<'a, T, A> {
-        DocBuilder(&T::ALLOCATOR, self).group().into()
-    }
-
-    /// Increase the indentation level of this document.
-    #[inline]
-    pub fn nest(self, offset: isize) -> Doc<'a, T, A> {
-        DocBuilder(&T::ALLOCATOR, self).nest(offset).into()
-    }
-
-    #[inline]
-    pub fn space() -> Doc<'a, T, A> {
-        T::ALLOCATOR.space().1
-    }
-
-    /// A line acts like a `\n` but behaves like `space` if it is grouped on a single line.
-    #[inline]
-    pub fn line() -> Doc<'a, T, A> {
-        Doc::hardline().flat_alt(Doc::space())
-    }
-
-    /// Acts like `line` but behaves like `nil` if grouped on a single line
-    #[inline]
-    pub fn line_() -> Doc<'a, T, A> {
-        T::ALLOCATOR.line_().into()
-    }
-
-    #[inline]
-    pub fn annotate(self, ann: A) -> Doc<'a, T, A> {
-        DocBuilder(&T::ALLOCATOR, self).annotate(ann).into()
-    }
-
-    #[inline]
-    pub fn union<D>(self, other: D) -> Doc<'a, T, A>
-    where
-        D: Into<Doc<'a, T, A>>,
-    {
-        DocBuilder(&T::ALLOCATOR, self).union(other).into()
-    }
 }
 
 impl<'a, T, A, S> From<S> for Doc<'a, T, A>
@@ -476,8 +509,8 @@ where
     ///
     /// ```
     /// use pretty::{Doc, BoxDoc};
-    /// let doc = Doc::<BoxDoc<_>>::group(
-    ///     Doc::text("hello").append(Doc::line()).append(Doc::text("world"))
+    /// let doc = BoxDoc::<()>::group(
+    ///     BoxDoc::text("hello").append(Doc::line()).append(Doc::text("world"))
     /// );
     /// assert_eq!(format!("{}", doc.pretty(80)), "hello world");
     /// ```
@@ -503,7 +536,7 @@ where
 
 /// The `DocBuilder` type allows for convenient appending of documents even for arena allocated
 /// documents by storing the arena inline.
-pub struct DocBuilder<'a, D, A = ()>(pub &'a D, pub Doc<'a, D::Doc, A>)
+pub struct DocBuilder<'a, D, A = ()>(pub &'a D, pub BuildDoc<'a, D::Doc, A>)
 where
     D: ?Sized + DocAllocator<'a, A>;
 
@@ -518,11 +551,11 @@ where
     }
 }
 
-impl<'a, D, A> Into<Doc<'a, D::Doc, A>> for DocBuilder<'a, D, A>
+impl<'a, D, A> Into<BuildDoc<'a, D::Doc, A>> for DocBuilder<'a, D, A>
 where
     D: ?Sized + DocAllocator<'a, A>,
 {
-    fn into(self) -> Doc<'a, D::Doc, A> {
+    fn into(self) -> BuildDoc<'a, D::Doc, A> {
         self.1
     }
 }
@@ -548,25 +581,34 @@ where
     type Doc: DocPtr<'a, A>;
 
     fn alloc(&'a self, doc: Doc<'a, Self::Doc, A>) -> Self::Doc;
+
     fn alloc_column_fn(
         &'a self,
         f: impl Fn(usize) -> Self::Doc + 'a,
     ) -> <Self::Doc as DocPtr<'a, A>>::ColumnFn;
+
     fn alloc_width_fn(
         &'a self,
         f: impl Fn(isize) -> Self::Doc + 'a,
     ) -> <Self::Doc as DocPtr<'a, A>>::WidthFn;
 
+    fn alloc_cow(&'a self, doc: BuildDoc<'a, Self::Doc, A>) -> Self::Doc {
+        match doc {
+            BuildDoc::DocPtr(d) => d,
+            BuildDoc::Doc(d) => self.alloc(d),
+        }
+    }
+
     /// Allocate an empty document.
     #[inline]
     fn nil(&'a self) -> DocBuilder<'a, Self, A> {
-        DocBuilder(self, Doc::Nil)
+        DocBuilder(self, Doc::Nil.into())
     }
 
     /// Allocate a single hardline.
     #[inline]
     fn hardline(&'a self) -> DocBuilder<'a, Self, A> {
-        DocBuilder(self, Doc::Line)
+        DocBuilder(self, Doc::Line.into())
     }
 
     #[inline]
@@ -583,12 +625,12 @@ where
     /// Acts like `line` but behaves like `nil` if grouped on a single line
     ///
     /// ```
-    /// use pretty::{Doc, BoxDoc};
+    /// use pretty::{Doc, RcDoc};
     ///
-    /// let doc = Doc::<BoxDoc<_>>::group(
-    ///     Doc::text("(")
+    /// let doc = RcDoc::<()>::group(
+    ///     RcDoc::text("(")
     ///         .append(
-    ///             Doc::line_()
+    ///             RcDoc::line_()
     ///                 .append(Doc::text("test"))
     ///                 .append(Doc::line())
     ///                 .append(Doc::text("test"))
@@ -630,7 +672,7 @@ where
     /// The given text must not contain line breaks.
     #[inline]
     fn text<U: Into<Cow<'a, str>>>(&'a self, data: U) -> DocBuilder<'a, Self, A> {
-        DocBuilder(self, Doc::Text(data.into()))
+        DocBuilder(self, Doc::Text(data.into()).into())
     }
 
     /// Allocate a document concatenating the given documents.
@@ -638,7 +680,7 @@ where
     fn concat<I>(&'a self, docs: I) -> DocBuilder<'a, Self, A>
     where
         I: IntoIterator,
-        I::Item: Into<Doc<'a, Self::Doc, A>>,
+        I::Item: Into<BuildDoc<'a, Self::Doc, A>>,
     {
         docs.into_iter().fold(self.nil(), |a, b| a.append(b))
     }
@@ -651,8 +693,8 @@ where
     fn intersperse<I, S>(&'a self, docs: I, separator: S) -> DocBuilder<'a, Self, A>
     where
         I: IntoIterator,
-        I::Item: Into<Doc<'a, Self::Doc, A>>,
-        S: Into<Doc<'a, Self::Doc, A>> + Clone,
+        I::Item: Into<BuildDoc<'a, Self::Doc, A>>,
+        S: Into<BuildDoc<'a, Self::Doc, A>> + Clone,
     {
         let mut result = self.nil();
         let mut iter = docs.into_iter();
@@ -683,7 +725,7 @@ where
     /// ```
     #[inline]
     fn column(&'a self, f: impl Fn(usize) -> Self::Doc + 'a) -> DocBuilder<'a, Self, A> {
-        DocBuilder(self, Doc::Column(self.alloc_column_fn(f)))
+        DocBuilder(self, Doc::Column(self.alloc_column_fn(f)).into())
     }
 
     /// Allocate a document that acts differently based on the current nesting level
@@ -700,7 +742,7 @@ where
     /// ```
     #[inline]
     fn nesting(&'a self, f: impl Fn(usize) -> Self::Doc + 'a) -> DocBuilder<'a, Self, A> {
-        DocBuilder(self, Doc::Nesting(self.alloc_column_fn(f)))
+        DocBuilder(self, Doc::Nesting(self.alloc_column_fn(f)).into())
     }
 
     /// Reflows `text` inserting `softline` in place of any whitespace
@@ -715,6 +757,66 @@ where
     }
 }
 
+/// Either a `Doc` or a pointer to a `Doc` (`D`)
+#[derive(Clone, Debug)]
+pub enum BuildDoc<'a, D, A>
+where
+    D: DocPtr<'a, A>,
+{
+    DocPtr(D),
+    Doc(Doc<'a, D, A>),
+}
+
+impl<'a, D, A> Deref for BuildDoc<'a, D, A>
+where
+    D: DocPtr<'a, A>,
+{
+    type Target = Doc<'a, D, A>;
+    fn deref(&self) -> &Self::Target {
+        match self {
+            BuildDoc::DocPtr(d) => d,
+            BuildDoc::Doc(d) => d,
+        }
+    }
+}
+
+impl<'a, A> From<RefDoc<'a, A>> for BuildDoc<'a, RefDoc<'a, A>, A> {
+    fn from(s: RefDoc<'a, A>) -> Self {
+        BuildDoc::DocPtr(s)
+    }
+}
+
+impl<'a, A> From<BoxDoc<'a, A>> for BuildDoc<'a, BoxDoc<'a, A>, A> {
+    fn from(s: BoxDoc<'a, A>) -> Self {
+        BuildDoc::DocPtr(s)
+    }
+}
+
+impl<'a, A> From<RcDoc<'a, A>> for BuildDoc<'a, RcDoc<'a, A>, A> {
+    fn from(s: RcDoc<'a, A>) -> Self {
+        BuildDoc::DocPtr(s)
+    }
+}
+
+impl<'a, T, A> From<Doc<'a, T, A>> for BuildDoc<'a, T, A>
+where
+    T: DocPtr<'a, A>,
+{
+    fn from(s: Doc<'a, T, A>) -> Self {
+        BuildDoc::Doc(s)
+    }
+}
+
+impl<'a, T, A, S> From<S> for BuildDoc<'a, T, A>
+where
+    T: DocPtr<'a, A>,
+    S: Into<Cow<'a, str>>,
+{
+    fn from(s: S) -> Self {
+        BuildDoc::Doc(Doc::Text(s.into()))
+    }
+}
+
 impl<'a, 's, D, A> DocBuilder<'a, D, A>
 where
     D: ?Sized + DocAllocator<'a, A>,
@@ -723,14 +825,14 @@ where
     #[inline]
     pub fn append<E>(self, that: E) -> DocBuilder<'a, D, A>
     where
-        E: Into<Doc<'a, D::Doc, A>>,
+        E: Into<BuildDoc<'a, D::Doc, A>>,
     {
         let DocBuilder(allocator, this) = self;
         let that = that.into();
-        let doc = match (this, that) {
-            (Doc::Nil, that) => that,
-            (this, Doc::Nil) => this,
-            (this, that) => Doc::Append(allocator.alloc(this), allocator.alloc(that)),
+        let doc = match (&*this, &*that) {
+            (Doc::Nil, _) => that,
+            (_, Doc::Nil) => this,
+            _ => Doc::Append(allocator.alloc_cow(this), allocator.alloc_cow(that)).into(),
         };
         DocBuilder(allocator, doc)
     }
@@ -762,13 +864,13 @@ where
     #[inline]
     pub fn flat_alt<E>(self, that: E) -> DocBuilder<'a, D, A>
     where
-        E: Into<Doc<'a, D::Doc, A>>,
+        E: Into<BuildDoc<'a, D::Doc, A>>,
     {
         let DocBuilder(allocator, this) = self;
         let that = that.into();
         DocBuilder(
             allocator,
-            Doc::FlatAlt(allocator.alloc(this.into()), allocator.alloc(that)),
+            Doc::FlatAlt(allocator.alloc_cow(this.into()), allocator.alloc_cow(that)).into(),
         )
     }
 
@@ -781,37 +883,43 @@ where
     #[inline]
     pub fn group(self) -> DocBuilder<'a, D, A> {
         let DocBuilder(allocator, this) = self;
-        DocBuilder(allocator, Doc::Group(allocator.alloc(this)))
+        DocBuilder(allocator, Doc::Group(allocator.alloc_cow(this)).into())
     }
 
     /// Increase the indentation level of this document.
     #[inline]
     pub fn nest(self, offset: isize) -> DocBuilder<'a, D, A> {
-        if let Doc::Nil = self.1 {
+        if let Doc::Nil = &*self.1 {
             return self;
         }
         if offset == 0 {
             return self;
         }
         let DocBuilder(allocator, this) = self;
-        DocBuilder(allocator, Doc::Nest(offset, allocator.alloc(this)))
+        DocBuilder(
+            allocator,
+            Doc::Nest(offset, allocator.alloc_cow(this)).into(),
+        )
     }
 
     #[inline]
     pub fn annotate(self, ann: A) -> DocBuilder<'a, D, A> {
         let DocBuilder(allocator, this) = self;
-        DocBuilder(allocator, Doc::Annotated(ann, allocator.alloc(this)))
+        DocBuilder(
+            allocator,
+            Doc::Annotated(ann, allocator.alloc_cow(this)).into(),
+        )
     }
 
     #[inline]
     pub fn union<E>(self, other: E) -> DocBuilder<'a, D, A>
     where
-        E: Into<Doc<'a, D::Doc, A>>,
+        E: Into<BuildDoc<'a, D::Doc, A>>,
     {
         let DocBuilder(allocator, this) = self;
         let other = other.into();
-        let doc = Doc::Union(allocator.alloc(this), allocator.alloc(other));
-        DocBuilder(allocator, doc)
+        let doc = Doc::Union(allocator.alloc_cow(this), allocator.alloc_cow(other));
+        DocBuilder(allocator, doc.into())
     }
 
     /// Lays out `self` so with the nesting level set to the current column
@@ -911,7 +1019,7 @@ where
     #[inline]
     pub fn width(self, f: impl Fn(isize) -> D::Doc + 'a) -> DocBuilder<'a, D, A>
     where
-        Doc<'a, D::Doc, A>: Clone,
+        BuildDoc<'a, D::Doc, A>: Clone,
     {
         let DocBuilder(allocator, this) = self;
         let f = allocator.alloc_width_fn(f);
@@ -928,8 +1036,8 @@ where
     #[inline]
     pub fn enclose<E, F>(self, before: E, after: F) -> DocBuilder<'a, D, A>
     where
-        E: Into<Doc<'a, D::Doc, A>>,
-        F: Into<Doc<'a, D::Doc, A>>,
+        E: Into<BuildDoc<'a, D::Doc, A>>,
+        F: Into<BuildDoc<'a, D::Doc, A>>,
     {
         let DocBuilder(allocator, _) = self;
         DocBuilder(allocator, before.into())
@@ -960,7 +1068,17 @@ where
     }
 
     pub fn into_doc(self) -> D::Doc {
-        self.0.alloc(self.1)
+        match self.1 {
+            BuildDoc::DocPtr(d) => d,
+            BuildDoc::Doc(d) => self.0.alloc(d),
+        }
+    }
+
+    fn into_plain_doc(self) -> Doc<'a, D::Doc, A> {
+        match self.1 {
+            BuildDoc::DocPtr(_) => unreachable!(),
+            BuildDoc::Doc(d) => d,
+        }
     }
 }
 
@@ -1006,11 +1124,32 @@ impl<A> Default for Arena<'_, A> {
     }
 }
 
-impl<A> Arena<'_, A> {
+impl<'a, A> Arena<'a, A> {
     pub fn new() -> Self {
         Arena {
             docs: typed_arena::Arena::new(),
             column_fns: Default::default(),
+        }
+    }
+
+    fn alloc_any<T>(&'a self, f: T) -> &'a T
+    where
+        T: 'a,
+    {
+        let f = Box::new(f);
+        let f_ptr = &*f as *const T;
+        // Until #[may_dangle] https://github.com/rust-lang/rust/issues/34761 is stabilized (or
+        // equivalent) we need to use unsafe to cast away the lifetime of the function as we do not
+        // have any other way of asserting that the `typed_arena::Arena` destructor does not touch
+        // `'a`
+        //
+        // Since `'a` is used elsewhere in our `Arena` type we still have all the other lifetime
+        // checks in place (the other arena stores no `Drop` value which touches `'a` which lets it
+        // compile)
+        unsafe {
+            self.column_fns
+                .alloc(std::mem::transmute::<Box<dyn DropT>, Box<dyn DropT>>(f));
+            &*f_ptr
         }
     }
 }
@@ -1067,42 +1206,14 @@ impl<'a, A> DocAllocator<'a, A> for Arena<'a, A> {
         &'a self,
         f: impl Fn(usize) -> Self::Doc + 'a,
     ) -> <Self::Doc as DocPtr<'a, A>>::ColumnFn {
-        let f = Box::new(f);
-        let f_ptr = &*f as *const _;
-        // Until #[may_dangle] https://github.com/rust-lang/rust/issues/34761 is stabilized (or
-        // equivalent) we need to use unsafe to cast away the lifetime of the function as we do not
-        // have any other way of asserting that the `typed_arena::Arena` destructor does not touch
-        // `'a`
-        //
-        // Since `'a` is used elsewhere in our `Arena` type we still have all the other lifetime
-        // checks in place (the other arena stores no `Drop` value which touches `'a` which lets it
-        // compile)
-        unsafe {
-            self.column_fns
-                .alloc(std::mem::transmute::<Box<dyn DropT>, Box<dyn DropT>>(f));
-            &*f_ptr
-        }
+        self.alloc_any(f)
     }
 
     fn alloc_width_fn(
         &'a self,
         f: impl Fn(isize) -> Self::Doc + 'a,
     ) -> <Self::Doc as DocPtr<'a, A>>::WidthFn {
-        let f = Box::new(f);
-        let f_ptr = &*f as *const _;
-        // Until #[may_dangle] https://github.com/rust-lang/rust/issues/34761 is stabilized (or
-        // equivalent) we need to use unsafe to cast away the lifetime of the function as we do not
-        // have any other way of asserting that the `typed_arena::Arena` destructor does not touch
-        // `'a`
-        //
-        // Since `'a` is used elsewhere in our `Arena` type we still have all the other lifetime
-        // checks in place (the other arena stores no `Drop` value which touches `'a` which lets it
-        // compile)
-        unsafe {
-            self.column_fns
-                .alloc(std::mem::transmute::<Box<dyn DropT>, Box<dyn DropT>>(f));
-            &*f_ptr
-        }
+        self.alloc_any(f)
     }
 }
 
@@ -1125,10 +1236,10 @@ mod tests {
 
     #[test]
     fn box_doc_inference() {
-        let doc = Doc::<BoxDoc<_>>::group(
-            Doc::text("test")
-                .append(Doc::line())
-                .append(Doc::text("test")),
+        let doc: BoxDoc<()> = BoxDoc::group(
+            BoxDoc::text("test")
+                .append(BoxDoc::line())
+                .append(BoxDoc::text("test")),
         );
 
         test!(doc, "test test");
@@ -1136,8 +1247,12 @@ mod tests {
 
     #[test]
     fn newline_in_text() {
-        let doc = Doc::<BoxDoc<_>>::group(
-            Doc::text("test").append(Doc::line().append(Doc::text("\"test\n     test\"")).nest(4)),
+        let doc: BoxDoc<()> = BoxDoc::group(
+            BoxDoc::text("test").append(
+                BoxDoc::line()
+                    .append(BoxDoc::text("\"test\n     test\""))
+                    .nest(4),
+            ),
         );
 
         test!(5, doc, "test\n    \"test\n     test\"");
@@ -1145,10 +1260,10 @@ mod tests {
 
     #[test]
     fn forced_newline() {
-        let doc = Doc::<BoxDoc<_>>::group(
-            Doc::text("test")
-                .append(Doc::hardline())
-                .append(Doc::text("test")),
+        let doc: BoxDoc<()> = BoxDoc::group(
+            BoxDoc::text("test")
+                .append(BoxDoc::hardline())
+                .append(BoxDoc::text("test")),
         );
 
         test!(doc, "test\ntest");
@@ -1156,22 +1271,22 @@ mod tests {
 
     #[test]
     fn space_do_not_reset_pos() {
-        let doc = Doc::<BoxDoc<_>>::group(Doc::text("test").append(Doc::line()))
-            .append(Doc::text("test"))
-            .append(Doc::group(Doc::line()).append(Doc::text("test")));
+        let doc: BoxDoc<()> = BoxDoc::group(BoxDoc::text("test").append(BoxDoc::line()))
+            .append(BoxDoc::text("test"))
+            .append(BoxDoc::group(BoxDoc::line()).append(BoxDoc::text("test")));
 
         test!(9, doc, "test test\ntest");
     }
 
-    // Tests that the `Doc::hardline()` does not cause the rest of document to think that it fits on
-    // a single line but instead breaks on the `Doc::line()` to fit with 6 columns
+    // Tests that the `BoxDoc::hardline()` does not cause the rest of document to think that it fits on
+    // a single line but instead breaks on the `BoxDoc::line()` to fit with 6 columns
     #[test]
     fn newline_does_not_cause_next_line_to_be_to_long() {
-        let doc = Doc::<RcDoc<_>>::group(
-            Doc::text("test").append(Doc::hardline()).append(
-                Doc::text("test")
-                    .append(Doc::line())
-                    .append(Doc::text("test")),
+        let doc: RcDoc<()> = RcDoc::group(
+            RcDoc::text("test").append(RcDoc::hardline()).append(
+                RcDoc::text("test")
+                    .append(RcDoc::line())
+                    .append(RcDoc::text("test")),
             ),
         );
 
@@ -1183,22 +1298,22 @@ mod tests {
         let arena = Arena::<()>::new();
         let doc = arena.text("x").append(arena.line()).append("y").group();
 
-        test!(100, doc.append(Doc::hardline()).1, "x y\n");
+        test!(100, doc.append(arena.hardline()).1, "x y\n");
     }
 
     #[test]
     fn block() {
-        let doc = Doc::<RcDoc<_>>::group(
-            Doc::text("{")
+        let doc: RcDoc<()> = RcDoc::group(
+            RcDoc::text("{")
                 .append(
-                    Doc::line()
-                        .append(Doc::text("test"))
-                        .append(Doc::line())
-                        .append(Doc::text("test"))
+                    RcDoc::line()
+                        .append(RcDoc::text("test"))
+                        .append(RcDoc::line())
+                        .append(RcDoc::text("test"))
                         .nest(2),
                 )
-                .append(Doc::line())
-                .append(Doc::text("}")),
+                .append(RcDoc::line())
+                .append(RcDoc::text("}")),
         );
 
         test!(5, doc, "{\n  test\n  test\n}");
@@ -1206,18 +1321,18 @@ mod tests {
 
     #[test]
     fn line_comment() {
-        let doc = Doc::<BoxDoc<_>>::group(
-            Doc::text("{")
+        let doc: BoxDoc<()> = BoxDoc::group(
+            BoxDoc::text("{")
                 .append(
-                    Doc::line()
-                        .append(Doc::text("test"))
-                        .append(Doc::line())
-                        .append(Doc::text("// a").append(Doc::hardline()))
-                        .append(Doc::text("test"))
+                    BoxDoc::line()
+                        .append(BoxDoc::text("test"))
+                        .append(BoxDoc::line())
+                        .append(BoxDoc::text("// a").append(BoxDoc::hardline()))
+                        .append(BoxDoc::text("test"))
                         .nest(2),
                 )
-                .append(Doc::line())
-                .append(Doc::text("}")),
+                .append(BoxDoc::line())
+                .append(BoxDoc::text("}")),
         );
 
         test!(14, doc, "{\n  test\n  // a\n  test\n}");
@@ -1225,12 +1340,12 @@ mod tests {
 
     #[test]
     fn annotation_no_panic() {
-        let doc = Doc::<BoxDoc<_>>::group(
-            Doc::text("test")
+        let doc: BoxDoc<()> = BoxDoc::group(
+            BoxDoc::text("test")
                 .annotate(())
-                .append(Doc::hardline())
+                .append(BoxDoc::hardline())
                 .annotate(())
-                .append(Doc::text("test")),
+                .append(BoxDoc::text("test")),
         );
 
         test!(doc, "test\ntest");
@@ -1238,47 +1353,47 @@ mod tests {
 
     #[test]
     fn union() {
-        let arg = Doc::text("(");
-        let tuple = |line: Doc<'static, BoxDoc<'static, ()>, ()>| {
-            line.append(Doc::text("x").append(",").group())
-                .append(Doc::line())
-                .append(Doc::text("1234567890").append(",").group())
+        let arg: BoxDoc<()> = BoxDoc::text("(");
+        let tuple = |line: BoxDoc<'static, ()>| {
+            line.append(BoxDoc::text("x").append(",").group())
+                .append(BoxDoc::line())
+                .append(BoxDoc::text("1234567890").append(",").group())
                 .nest(2)
-                .append(Doc::line_())
+                .append(BoxDoc::line_())
                 .append(")")
         };
 
-        let from = Doc::text("let")
-            .append(Doc::line())
-            .append(Doc::text("x"))
-            .append(Doc::line())
-            .append(Doc::text("="))
+        let from = BoxDoc::text("let")
+            .append(BoxDoc::line())
+            .append(BoxDoc::text("x"))
+            .append(BoxDoc::line())
+            .append(BoxDoc::text("="))
             .group();
 
         let single = from
             .clone()
-            .append(Doc::line())
+            .append(BoxDoc::line())
             .append(arg.clone())
             .group()
-            .append(tuple(Doc::line_()))
+            .append(tuple(BoxDoc::line_()))
             .group();
 
         let hang = from
             .clone()
-            .append(Doc::line())
+            .append(BoxDoc::line())
             .append(arg.clone())
             .group()
-            .append(tuple(Doc::hardline()))
+            .append(tuple(BoxDoc::hardline()))
             .group();
 
         let break_all = from
-            .append(Doc::line())
+            .append(BoxDoc::line())
             .append(arg.clone())
-            .append(tuple(Doc::line()))
+            .append(tuple(BoxDoc::line()))
             .group()
             .nest(2);
 
-        let doc: Doc<'_, BoxDoc<'_, _>> = Doc::group(single.union(hang.union(break_all)));
+        let doc = BoxDoc::group(single.union(hang.union(break_all)));
 
         test!(doc, "let x = (x, 1234567890,)");
         test!(8, doc, "let x =\n  (\n    x,\n    1234567890,\n  )");
@@ -1287,10 +1402,10 @@ mod tests {
 
     #[test]
     fn usize_max_value() {
-        let doc = Doc::<BoxDoc<_>>::group(
-            Doc::text("test")
-                .append(Doc::line())
-                .append(Doc::text("test")),
+        let doc: BoxDoc<()> = BoxDoc::group(
+            BoxDoc::text("test")
+                .append(BoxDoc::line())
+                .append(BoxDoc::text("test")),
         );
 
         test!(usize::max_value(), doc, "test test");
