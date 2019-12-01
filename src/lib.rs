@@ -290,6 +290,9 @@ macro_rules! impl_doc {
             /// example, if the documents are `[A, B, C, ..., Z]`, this yields `[A, S, B, S, C, S, ..., S, Z]`.
             ///
             /// Compare [the `intersperse` method from the `itertools` crate](https://docs.rs/itertools/0.5.9/itertools/trait.Itertools.html#method.intersperse).
+            ///
+            /// NOTE: The separator type, `S` may need to be cloned. Consider using cheaply cloneable ptr
+            /// like `RefDoc` or `RcDoc`
             #[inline]
             pub fn intersperse<I, S>(docs: I, separator: S) -> Self
             where
@@ -689,6 +692,9 @@ where
     /// `[A, B, C, ..., Z]`, yielding `[A, S, B, S, C, S, ..., S, Z]`.
     ///
     /// Compare [the `intersperse` method from the `itertools` crate](https://docs.rs/itertools/0.5.9/itertools/trait.Itertools.html#method.intersperse).
+    ///
+    /// NOTE: The separator type, `S` may need to be cloned. Consider using cheaply cloneable ptr
+    /// like `RefDoc` or `RcDoc`
     #[inline]
     fn intersperse<I, S>(&'a self, docs: I, separator: S) -> DocBuilder<'a, Self, A>
     where
@@ -924,6 +930,9 @@ where
 
     /// Lays out `self` so with the nesting level set to the current column
     ///
+    /// NOTE: The doc pointer type, `D` may need to be cloned. Consider using cheaply cloneable ptr
+    /// like `RefDoc` or `RcDoc`
+    ///
     /// ```rust
     /// use pretty::DocAllocator;
     ///
@@ -948,6 +957,9 @@ where
 
     /// Lays out `self` with a nesting level set to the current level plus `adjust`.
     ///
+    /// NOTE: The doc pointer type, `D` may need to be cloned. Consider using cheaply cloneable ptr
+    /// like `RefDoc` or `RcDoc`
+    ///
     /// ```rust
     /// use pretty::DocAllocator;
     ///
@@ -968,6 +980,9 @@ where
     }
 
     /// Indents `self` by `adjust` spaces from the current cursor position
+    ///
+    /// NOTE: The doc pointer type, `D` may need to be cloned. Consider using cheaply cloneable ptr
+    /// like `RefDoc` or `RcDoc`
     ///
     /// ```rust
     /// use pretty::DocAllocator;
@@ -1005,6 +1020,9 @@ where
     }
 
     /// Lays out `self` and provides the column width of it available to `f`
+    ///
+    /// NOTE: The doc pointer type, `D` may need to be cloned. Consider using cheaply cloneable ptr
+    /// like `RefDoc` or `RcDoc`
     ///
     /// ```rust
     /// use pretty::DocAllocator;
