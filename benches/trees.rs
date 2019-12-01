@@ -1,22 +1,16 @@
-extern crate criterion;
-extern crate pretty;
-extern crate tempfile;
-extern crate typed_arena;
-
 use std::io;
 
 use criterion::{criterion_group, criterion_main, Bencher, Criterion};
 
-use pretty::BoxAllocator;
-use trees::Tree;
-use typed_arena::Arena;
+use crate::trees::Tree;
+use pretty::{Arena, BoxAllocator};
 
 #[path = "../examples/trees.rs"]
 mod trees;
 
 macro_rules! bench_trees {
     ($b:expr, $out:expr, $allocator:expr, $size:expr) => {{
-        let arena = Arena::new();
+        let arena = typed_arena::Arena::new();
         let b = $b;
         let mut out = $out;
         let size = $size;
@@ -57,54 +51,54 @@ macro_rules! bench_trees {
     }};
 }
 
-fn bench_sink_box(b: &mut Bencher) -> () {
+fn bench_sink_box(b: &mut Bencher<'_>) -> () {
     bench_trees!(b, io::sink(), BoxAllocator, 1)
 }
 
-fn bench_sink_arena(b: &mut Bencher) -> () {
+fn bench_sink_arena(b: &mut Bencher<'_>) -> () {
     bench_trees!(b, io::sink(), Arena::new(), 1)
 }
 
-fn bench_vec_box(b: &mut Bencher) -> () {
+fn bench_vec_box(b: &mut Bencher<'_>) -> () {
     bench_trees!(b, Vec::new(), BoxAllocator, 1)
 }
 
-fn bench_vec_arena(b: &mut Bencher) -> () {
+fn bench_vec_arena(b: &mut Bencher<'_>) -> () {
     bench_trees!(b, Vec::new(), Arena::new(), 1)
 }
 
-fn bench_io_box(b: &mut Bencher) -> () {
+fn bench_io_box(b: &mut Bencher<'_>) -> () {
     let out = tempfile::tempfile().unwrap();
     bench_trees!(b, io::BufWriter::new(out), BoxAllocator, 1)
 }
 
-fn bench_io_arena(b: &mut Bencher) -> () {
+fn bench_io_arena(b: &mut Bencher<'_>) -> () {
     let out = tempfile::tempfile().unwrap();
     bench_trees!(b, io::BufWriter::new(out), Arena::new(), 1)
 }
 
-fn bench_large_sink_box(b: &mut Bencher) -> () {
+fn bench_large_sink_box(b: &mut Bencher<'_>) -> () {
     bench_trees!(b, io::sink(), BoxAllocator, 50)
 }
 
-fn bench_large_sink_arena(b: &mut Bencher) -> () {
+fn bench_large_sink_arena(b: &mut Bencher<'_>) -> () {
     bench_trees!(b, io::sink(), Arena::new(), 50)
 }
 
-fn bench_large_vec_box(b: &mut Bencher) -> () {
+fn bench_large_vec_box(b: &mut Bencher<'_>) -> () {
     bench_trees!(b, Vec::new(), BoxAllocator, 50)
 }
 
-fn bench_large_vec_arena(b: &mut Bencher) -> () {
+fn bench_large_vec_arena(b: &mut Bencher<'_>) -> () {
     bench_trees!(b, Vec::new(), Arena::new(), 50)
 }
 
-fn bench_large_io_box(b: &mut Bencher) -> () {
+fn bench_large_io_box(b: &mut Bencher<'_>) -> () {
     let out = tempfile::tempfile().unwrap();
     bench_trees!(b, io::BufWriter::new(out), BoxAllocator, 50)
 }
 
-fn bench_large_io_arena(b: &mut Bencher) -> () {
+fn bench_large_io_arena(b: &mut Bencher<'_>) -> () {
     let out = tempfile::tempfile().unwrap();
     bench_trees!(b, io::BufWriter::new(out), Arena::new(), 50)
 }
