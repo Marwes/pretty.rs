@@ -255,7 +255,13 @@ where
                     // Newlines inside the group makes it not fit, but those outside lets it
                     // fit on the current line
                     Doc::Line => return newline_fits(mode),
-                    Doc::Text(ref str) => {
+                    Doc::BorrowedText(ref str) => {
+                        pos += str.len();
+                        if pos > width {
+                            return false;
+                        }
+                    }
+                    Doc::OwnedText(ref str) => {
                         pos += str.len();
                         if pos > width {
                             return false;
@@ -362,7 +368,11 @@ where
                     write_newline(ind, out)?;
                     pos = ind;
                 }
-                Doc::Text(ref s) => {
+                Doc::OwnedText(ref s) => {
+                    out.write_str_all(s)?;
+                    pos += s.len();
+                }
+                Doc::BorrowedText(ref s) => {
                     out.write_str_all(s)?;
                     pos += s.len();
                 }

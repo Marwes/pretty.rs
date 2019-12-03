@@ -163,7 +163,8 @@ pub enum Doc<'a, T: DocPtr<'a, A>, A = ()> {
     FlatAlt(T, T),
     Nest(isize, T),
     Line,
-    Text(Cow<'a, str>),
+    OwnedText(Box<str>),
+    BorrowedText(&'a str),
     Annotated(A, T),
     Union(T, T),
     Column(T::ColumnFn),
@@ -185,7 +186,8 @@ where
             Doc::Group(ref doc) => f.debug_tuple("Group").field(doc).finish(),
             Doc::Nest(off, ref doc) => f.debug_tuple("Nest").field(&off).field(doc).finish(),
             Doc::Line => f.debug_tuple("Line").finish(),
-            Doc::Text(ref s) => f.debug_tuple("Text").field(s).finish(),
+            Doc::OwnedText(ref s) => f.debug_tuple("Text").field(s).finish(),
+            Doc::BorrowedText(ref s) => f.debug_tuple("Text").field(s).finish(),
             Doc::Annotated(ref ann, ref doc) => {
                 f.debug_tuple("Annotated").field(ann).field(doc).finish()
             }
@@ -379,12 +381,15 @@ macro_rules! impl_doc_methods {
             /// The given text, which must not contain line breaks.
             #[inline]
             pub fn text<U: Into<Cow<'a, str>>>(data: U) -> Self {
-                Doc::Text(data.into()).into()
+                match data.into() {
+                    Cow::Owned(t) => Doc::OwnedText(t.into()).into(),
+                    Cow::Borrowed(t) => Doc::BorrowedText(t).into(),
+                }
             }
 
             #[inline]
             pub fn space() -> Self {
-                Doc::Text(" ".into()).into()
+                Doc::BorrowedText(" ").into()
             }
         }
 
@@ -466,7 +471,7 @@ where
     S: Into<Cow<'a, str>>,
 {
     fn from(s: S) -> Doc<'a, T, A> {
-        Doc::Text(s.into())
+        Doc::text(s)
     }
 }
 
@@ -790,7 +795,7 @@ where
     /// The given text must not contain line breaks.
     #[inline]
     fn text<U: Into<Cow<'a, str>>>(&'a self, data: U) -> DocBuilder<'a, Self, A> {
-        DocBuilder(self, Doc::Text(data.into()).into())
+        DocBuilder(self, Doc::text(data).into())
     }
 
     /// Allocate a document concatenating the given documents.
@@ -950,7 +955,7 @@ where
     S: Into<Cow<'a, str>>,
 {
     fn from(s: S) -> Self {
-        BuildDoc::Doc(Doc::Text(s.into()))
+        BuildDoc::Doc(Doc::text(s))
     }
 }
 
@@ -1443,8 +1448,8 @@ impl<'a, A> DocAllocator<'a, A> for Arena<'a, A> {
             Doc::Nil => &Doc::Nil,
             Doc::Line => &Doc::Line,
             // line()
-            Doc::FlatAlt(RefDoc(Doc::Line), RefDoc(Doc::Text(Cow::Borrowed(" ")))) => {
-                &Doc::FlatAlt(RefDoc(&Doc::Line), RefDoc(&Doc::Text(Cow::Borrowed(" "))))
+            Doc::FlatAlt(RefDoc(Doc::Line), RefDoc(Doc::BorrowedText(" "))) => {
+                &Doc::FlatAlt(RefDoc(&Doc::Line), RefDoc(&Doc::BorrowedText(" ")))
             }
             // line_()
             Doc::FlatAlt(RefDoc(Doc::Line), RefDoc(Doc::Nil)) => {
