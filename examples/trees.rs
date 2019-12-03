@@ -1,4 +1,4 @@
-use pretty::{BoxAllocator, DocAllocator, DocBuilder};
+use pretty::{BoxAllocator, DocAllocator, DocBuilder, DocPtr};
 use std::io;
 use std::str;
 
@@ -17,7 +17,7 @@ impl<'a> Forest<'a> {
     fn bracket<'b, D, A>(&'b self, allocator: &'b D) -> DocBuilder<'b, D, A>
     where
         D: DocAllocator<'b, A>,
-        D::Doc: Clone,
+        D::Doc: DocPtr<'b, A, Allocator = D> + Clone,
         A: Clone,
     {
         if (self.0).len() == 0 {
@@ -34,7 +34,7 @@ impl<'a> Forest<'a> {
     fn pretty<'b, D, A>(&'b self, allocator: &'b D) -> DocBuilder<'b, D, A>
     where
         D: DocAllocator<'b, A>,
-        D::Doc: Clone,
+        D::Doc: DocPtr<'b, A, Allocator = D> + Clone,
         A: Clone,
     {
         let forest = self.0;
@@ -70,7 +70,7 @@ impl<'a> Tree<'a> {
     pub fn pretty<'b, D, A>(&'b self, allocator: &'b D) -> DocBuilder<'b, D, A>
     where
         D: DocAllocator<'b, A>,
-        D::Doc: Clone,
+        D::Doc: DocPtr<'b, A, Allocator = D> + Clone,
         A: Clone,
     {
         allocator

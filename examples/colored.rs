@@ -26,7 +26,6 @@ fn main() {
         .append(arena.space())
         .append(intense)
         .group()
-        .1
         .render_colored(80, StandardStream::stdout(ColorChoice::Auto))
         .unwrap();
 }

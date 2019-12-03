@@ -258,14 +258,14 @@ macro_rules! impl_doc {
             type ColumnFn = std::rc::Rc<dyn Fn(usize) -> Self + 'a>;
             type WidthFn = std::rc::Rc<dyn Fn(isize) -> Self + 'a>;
             type Allocator = $allocator;
-            fn doc<'d>(&'d self, arena: &'d Self::Allocator) -> &'d Doc<'a, Self, A> { self }
+            fn doc<'d>(&'d self, _arena: &'d Self::Allocator) -> &'d Doc<'a, Self, A> { self }
         }
 
         impl<'a, A> StaticDoc<'a, A> for $name<'a, A> {
             const ALLOCATOR: &'static Self::Allocator = &$allocator;
         }
 
-        impl_doc_methods!($name ('a, A) where () where ());
+        impl_doc_methods!($name ('a, A) () where () where ());
 
         impl<'a, A> $name<'a, A> {
             /// Append the given document after this document.
@@ -352,8 +352,8 @@ macro_rules! impl_doc {
 }
 
 macro_rules! impl_doc_methods {
-    ($name: ident ( $($params: tt)* ) where ( $($where_: tt)* ) where ( $($where_2: tt)* )) => {
-        impl< $($params)* > $name< $($params)* >
+    ($name: ident ( $($params: tt)* )  ( $($extra_params: tt)* ) where ( $($where_: tt)* ) where ( $($where_2: tt)* )) => {
+        impl< $($params)*> $name< $($params)* >
             where $($where_)*
         {
             /// An empty document.
@@ -388,7 +388,7 @@ macro_rules! impl_doc_methods {
             }
         }
 
-        impl< $($params)* > $name< $($params)* >
+        impl< $($params)*  $($extra_params)* > $name< $($params)* >
             where $($where_2)*
         {
             /// A line acts like a `\n` but behaves like `space` if it is grouped on a single line.
@@ -409,8 +409,14 @@ macro_rules! impl_doc_methods {
 impl_doc!(BoxDoc, BoxAllocator);
 impl_doc!(RcDoc, RcAllocator);
 
-// impl_doc_methods!(Doc ('a, D, A) where (D: DocPtr<'a, A>) where (D: StaticDoc<'a, A>, D::Allocator: DocAllocator<'a, A, Doc = D> + 'static));
-// impl_doc_methods!(BuildDoc ('a, D, A) where (D: DocPtr<'a, A>) where (D: StaticDoc<'a, A>, D::Allocator: DocAllocator<'a, A, Doc = D> + 'static));
+impl_doc_methods!(Doc ('a, D, A) (, B)
+    where (D: DocPtr<'a, A>)
+    where (D: StaticDoc<'a, A, Allocator = B>, B: DocAllocator<'a, A, Doc = D> + 'static)
+);
+impl_doc_methods!(BuildDoc ('a, D, A) (, B)
+    where (D: DocPtr<'a, A>)
+    where (D: StaticDoc<'a, A, Allocator = B>, B: DocAllocator<'a, A, Doc = D> + 'static)
+);
 
 #[derive(Default)]
 pub struct BoxAllocator;
@@ -464,23 +470,23 @@ where
     }
 }
 
-pub struct Pretty<'a, T, A>
+pub struct Pretty<'a, 'd, T, A>
 where
     A: 'a,
-    T: ?Sized + DocAllocator<'a, A> + 'a,
-    T::Doc: DocPtr<'a, A, Allocator = T>,
+    T: DocPtr<'a, A>,
 {
-    doc: DocBuilder<'a, T, A>,
+    doc: &'d Doc<'a, T, A>,
+    allocator: &'d T::Allocator,
     width: usize,
 }
 
-impl<'a, T, A> fmt::Display for Pretty<'a, T, A>
+impl<'a, T, A> fmt::Display for Pretty<'a, '_, T, A>
 where
-    T: ?Sized + DocAllocator<'a, A> + 'a,
-    T::Doc: DocPtr<'a, A, Allocator = T>,
+    A: 'a,
+    T: DocPtr<'a, A> + 'a,
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        self.doc.render_fmt(self.width, f)
+        render::best(self.allocator, self.doc, self.width, &mut FmtWrite::new(f))
     }
 }
 
@@ -526,8 +532,12 @@ where
     /// assert_eq!(format!("{}", doc.pretty(80)), "hello world");
     /// ```
     #[inline]
-    pub fn pretty(self, width: usize) -> Pretty<'a, T, A> {
-        Pretty { doc: self, width }
+    pub fn pretty<'d>(&'d self, width: usize) -> Pretty<'a, 'd, T::Doc, A> {
+        Pretty {
+            doc: self.doc(),
+            allocator: self.0,
+            width,
+        }
     }
 }
 
@@ -573,25 +583,42 @@ where
     /// assert_eq!(format!("{}", doc.pretty(80)), "hello world");
     /// ```
     #[inline]
-    pub fn pretty(self, width: usize) -> Pretty<'a, T::Allocator, A> {
+    pub fn pretty<'d>(&'d self, width: usize) -> Pretty<'a, 'd, T, A> {
         Pretty {
-            doc: DocBuilder(T::ALLOCATOR, BuildDoc::Doc(self)),
+            doc: self,
+            allocator: T::ALLOCATOR,
             width,
         }
     }
 }
 
 #[cfg(feature = "termcolor")]
-impl<'a, T> Doc<'a, T, ColorSpec>
+impl<'a, T> DocBuilder<'a, T, ColorSpec>
 where
-    T: DocPtr<'a, ColorSpec> + 'a,
+    T: ?Sized + DocAllocator<'a, ColorSpec>,
+    T::Doc: DocPtr<'a, ColorSpec, Allocator = T>,
 {
     #[inline]
     pub fn render_colored<W>(&self, width: usize, out: W) -> io::Result<()>
     where
         W: WriteColor,
     {
-        render::best(self, width, &mut TermColored::new(out))
+        render::best(self.0, self.doc(), width, &mut TermColored::new(out))
+    }
+}
+
+#[cfg(feature = "termcolor")]
+impl<'a, T, B> Doc<'a, T, ColorSpec>
+where
+    T: StaticDoc<'a, ColorSpec, Allocator = B> + 'a,
+    B: DocAllocator<'a, ColorSpec, Doc = T> + 'static,
+{
+    #[inline]
+    pub fn render_colored<W>(&self, width: usize, out: W) -> io::Result<()>
+    where
+        W: WriteColor,
+    {
+        render::best(T::ALLOCATOR, self, width, &mut TermColored::new(out))
     }
 }
 
@@ -639,7 +666,7 @@ where
     type ColumnFn: Deref<Target = dyn Fn(usize) -> Self + 'a> + Clone + 'a;
     type WidthFn: Deref<Target = dyn Fn(isize) -> Self + 'a> + Clone + 'a;
 
-    type Allocator: DocAllocator<'a, A> + ?Sized;
+    type Allocator: DocAllocator<'a, A, Doc = Self> + ?Sized;
     fn doc<'d>(&'d self, arena: &'d Self::Allocator) -> &Doc<'a, Self, A>;
 }
 
@@ -647,7 +674,7 @@ impl<'a, A> DocPtr<'a, A> for RefDoc<'a, A> {
     type ColumnFn = &'a (dyn Fn(usize) -> Self + 'a);
     type WidthFn = &'a (dyn Fn(isize) -> Self + 'a);
     type Allocator = Arena<'a, A>;
-    fn doc<'d>(&'d self, arena: &'d Self::Allocator) -> &'d Doc<'a, Self, A> {
+    fn doc<'d>(&'d self, _arena: &'d Self::Allocator) -> &'d Doc<'a, Self, A> {
         self
     }
 }
@@ -817,7 +844,7 @@ where
     ///     .append(arena.column(|l| {
     ///         arena.text("| <- column ").append(arena.as_string(l)).into_doc()
     ///     }));
-    /// assert_eq!(doc.1.pretty(80).to_string(), "prefix | <- column 7");
+    /// assert_eq!(doc.pretty(80).to_string(), "prefix | <- column 7");
     /// ```
     #[inline]
     fn column(&'a self, f: impl Fn(usize) -> Self::Doc + 'a) -> DocBuilder<'a, Self, A> {
@@ -834,7 +861,7 @@ where
     ///     .append(arena.nesting(|l| {
     ///         arena.text("[Nested: ").append(arena.as_string(l)).append("]").into_doc()
     ///     }).nest(4));
-    /// assert_eq!(doc.1.pretty(80).to_string(), "prefix [Nested: 4]");
+    /// assert_eq!(doc.pretty(80).to_string(), "prefix [Nested: 4]");
     /// ```
     #[inline]
     fn nesting(&'a self, f: impl Fn(usize) -> Self::Doc + 'a) -> DocBuilder<'a, Self, A> {
@@ -969,8 +996,8 @@ where
     ///     )
     ///     .group();
     ///
-    /// assert_eq!(doc.1.pretty(100).to_string(), "let x in x");
-    /// assert_eq!(doc.1.pretty(8).to_string(), "let x\nx");
+    /// assert_eq!(doc.pretty(100).to_string(), "let x in x");
+    /// assert_eq!(doc.pretty(8).to_string(), "let x\nx");
     /// ```
     #[inline]
     pub fn flat_alt<E>(self, that: E) -> DocBuilder<'a, D, A>
@@ -1044,7 +1071,7 @@ where
     /// let arena = pretty::Arena::<()>::new();
     /// let doc = arena.text("lorem").append(arena.text(" "))
     ///     .append(arena.intersperse(["ipsum", "dolor"].iter().cloned(), arena.line_()).align());
-    /// assert_eq!(doc.1.pretty(80).to_string(), "lorem ipsum\n      dolor");
+    /// assert_eq!(doc.pretty(80).to_string(), "lorem ipsum\n      dolor");
     /// ```
     #[inline]
     pub fn align(self) -> DocBuilder<'a, D, A>
@@ -1072,7 +1099,7 @@ where
     /// let doc = arena.text("prefix").append(arena.text(" "))
     ///     .append(arena.reflow("Indenting these words with nest").hang(4));
     /// assert_eq!(
-    ///     doc.1.pretty(24).to_string(),
+    ///     doc.pretty(24).to_string(),
     ///     "prefix Indenting these\n           words with\n           nest",
     /// );
     /// ```
@@ -1096,7 +1123,7 @@ where
     /// let doc = arena.text("prefix").append(arena.text(" "))
     ///     .append(arena.reflow("The indent function indents these words!").indent(4));
     /// assert_eq!(
-    ///     doc.1.pretty(24).to_string(),
+    ///     doc.pretty(24).to_string(),
     /// "
     /// prefix     The indent
     ///            function
@@ -1137,7 +1164,7 @@ where
     ///     .append(arena.column(|l| {
     ///         arena.text("| <- column ").append(arena.as_string(l)).into_doc()
     ///     }));
-    /// assert_eq!(doc.1.pretty(80).to_string(), "prefix | <- column 7");
+    /// assert_eq!(doc.pretty(80).to_string(), "prefix | <- column 7");
     /// ```
     #[inline]
     pub fn width(self, f: impl Fn(isize) -> D::Doc + 'a) -> DocBuilder<'a, D, A>
@@ -1290,14 +1317,14 @@ use std::cell::RefCell;
 
 pub struct CompactArena<'a, A = ()> {
     docs: RefCell<compact_arena::TinyArena<'a, Doc<'a, IdxDoc<'a, A>, A>>>,
-    column_fns: RefCell<compact_arena::TinyArena<'a, Box<dyn DropT>>>,
+    column_fns: typed_arena::Arena<Box<dyn DropT>>,
 }
 
 impl<'a, A> CompactArena<'a, A> {
     pub unsafe fn new(tag: compact_arena::InvariantLifetime<'a>) -> Self {
         CompactArena {
-            docs: compact_arena::TinyArena::new(tag),
-            column_fns: compact_arena::TinyArena::new(tag),
+            docs: RefCell::new(compact_arena::TinyArena::new(tag)),
+            column_fns: typed_arena::Arena::new(),
         }
     }
 
@@ -1317,7 +1344,7 @@ impl<'a, A> CompactArena<'a, A> {
         // compile)
         unsafe {
             self.column_fns
-                .add(std::mem::transmute::<Box<dyn DropT>, Box<dyn DropT>>(f));
+                .alloc(std::mem::transmute::<Box<dyn DropT>, Box<dyn DropT>>(f));
             &*f_ptr
         }
     }
@@ -1331,7 +1358,8 @@ where
     type WidthFn = &'a (dyn Fn(isize) -> Self + 'a);
     type Allocator = CompactArena<'a, A>;
     fn doc<'d>(&'d self, arena: &'d Self::Allocator) -> &'d Doc<'a, Self, A> {
-        &arena.docs[self.0]
+        // SAFETY TinyArena is never reallocated, so the values never move
+        unsafe { &*(&arena.docs.borrow()[self.0] as *const _) }
     }
 }
 
@@ -1460,6 +1488,11 @@ mod tests {
 
     #[test]
     fn box_doc_inference() {
+        panic!(
+            "{} {}",
+            std::mem::size_of::<Doc<RefDoc<()>, ()>>(),
+            std::mem::size_of::<Doc<IdxDoc<()>, ()>>(),
+        );
         let doc: BoxDoc<()> = BoxDoc::group(
             BoxDoc::text("test")
                 .append(BoxDoc::line())
