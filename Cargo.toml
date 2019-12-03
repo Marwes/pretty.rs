@@ -15,6 +15,7 @@ features = ["termcolor"]
 
 [dependencies]
 typed-arena = "1.2.0"
+compact_arena = "0.4"
 termcolor = { version = "0.3", optional = true }
 
 [dev-dependencies]

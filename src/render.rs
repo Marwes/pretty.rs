@@ -164,7 +164,12 @@ macro_rules! make_spaces {
 pub(crate) const SPACES: &str = make_spaces!(,,,,,,,,,,);
 
 #[inline]
-pub fn best<'a, W, T, A>(doc: &Doc<'a, T, A>, width: usize, out: &mut W) -> Result<(), W::Error>
+pub fn best<'a, W, T, A>(
+    allocator: &T::Allocator,
+    doc: &Doc<'a, T, A>,
+    width: usize,
+    out: &mut W,
+) -> Result<(), W::Error>
 where
     T: DocPtr<'a, A> + 'a,
     W: ?Sized + RenderAnnotated<A>,
@@ -200,6 +205,7 @@ where
 
     fn fitting<'a, 'd, T, A>(
         temp_arena: &'d typed_arena::Arena<T>,
+        allocator: &'d T::Allocator,
         next: &'d Doc<'a, T, A>,
         bcmds: &[Cmd<'d, 'a, T, A>],
         fcmds: &mut Vec<&'d Doc<'a, T, A>>,
@@ -235,14 +241,14 @@ where
                 match *doc {
                     Doc::Nil => {}
                     Doc::Append(ref ldoc, ref rdoc) => {
-                        fcmds.push(rdoc);
+                        fcmds.push(rdoc.doc(allocator));
                         // Since appended documents often appear in sequence on the left side we
                         // gain a slight performance increase by batching these pushes (avoiding
                         // to push and directly pop `Append` documents)
-                        doc = ldoc;
+                        doc = ldoc.doc(allocator);
                         while let Doc::Append(ref l, ref r) = *doc {
-                            fcmds.push(r);
-                            doc = l;
+                            fcmds.push(r.doc(allocator));
+                            doc = l.doc(allocator);
                         }
                         continue;
                     }
@@ -259,23 +265,24 @@ where
                         doc = match mode {
                             Mode::Break => b,
                             Mode::Flat => f,
-                        };
+                        }
+                        .doc(allocator);
                         continue;
                     }
 
                     Doc::Column(ref f) => {
-                        doc = temp_arena.alloc(f(pos));
+                        doc = temp_arena.alloc(f(pos)).doc(allocator);
                         continue;
                     }
                     Doc::Nesting(ref f) => {
-                        doc = temp_arena.alloc(f(ind));
+                        doc = temp_arena.alloc(f(ind)).doc(allocator);
                         continue;
                     }
                     Doc::Nest(_, ref next)
                     | Doc::Group(ref next)
                     | Doc::Annotated(_, ref next)
                     | Doc::Union(_, ref next) => {
-                        doc = next;
+                        doc = next.doc(allocator);
                         continue;
                     }
                 }
@@ -297,16 +304,18 @@ where
             match *doc {
                 Doc::Nil => {}
                 Doc::Append(ref ldoc, ref rdoc) => {
-                    bcmds.push((ind, mode, rdoc));
-                    let mut doc = ldoc;
-                    while let Doc::Append(ref l, ref r) = **doc {
-                        bcmds.push((ind, mode, r));
-                        doc = l;
+                    bcmds.push((ind, mode, rdoc.doc(allocator)));
+                    let mut doc = ldoc.doc(allocator);
+                    while let Doc::Append(ref l, ref r) = *doc {
+                        bcmds.push((ind, mode, r.doc(allocator)));
+                        doc = l.doc(allocator);
                     }
                     cmd = (ind, mode, doc);
                     continue;
                 }
                 Doc::FlatAlt(ref b, ref f) => {
+                    let b = b.doc(allocator);
+                    let f = f.doc(allocator);
                     cmd = (
                         ind,
                         mode,
@@ -317,30 +326,35 @@ where
                     );
                     continue;
                 }
-                Doc::Group(ref doc) => match mode {
-                    Mode::Flat => {
-                        cmd = (ind, Mode::Flat, doc);
-                        continue;
+                Doc::Group(ref doc) => {
+                    let doc = doc.doc(allocator);
+                    match mode {
+                        Mode::Flat => {
+                            cmd = (ind, Mode::Flat, doc);
+                            continue;
+                        }
+                        Mode::Break => {
+                            cmd = if fitting(
+                                &temp_arena,
+                                allocator,
+                                doc,
+                                &bcmds,
+                                &mut fcmds,
+                                pos,
+                                width,
+                                ind,
+                                |mode| mode == Mode::Break,
+                            ) {
+                                (ind, Mode::Flat, doc)
+                            } else {
+                                (ind, Mode::Break, doc)
+                            };
+                            continue;
+                        }
                     }
-                    Mode::Break => {
-                        cmd = if fitting(
-                            &temp_arena,
-                            doc,
-                            &bcmds,
-                            &mut fcmds,
-                            pos,
-                            width,
-                            ind,
-                            |mode| mode == Mode::Break,
-                        ) {
-                            (ind, Mode::Flat, &**doc)
-                        } else {
-                            (ind, Mode::Break, doc)
-                        };
-                        continue;
-                    }
-                },
+                }
                 Doc::Nest(off, ref doc) => {
+                    let doc = doc.doc(allocator);
                     cmd = ((ind as isize).saturating_add(off) as usize, mode, doc);
                     continue;
                 }
@@ -353,15 +367,26 @@ where
                     pos += s.len();
                 }
                 Doc::Annotated(ref ann, ref doc) => {
+                    let doc = doc.doc(allocator);
                     out.push_annotation(ann)?;
                     annotation_levels.push(bcmds.len());
                     cmd = (ind, mode, doc);
                     continue;
                 }
                 Doc::Union(ref l, ref r) => {
-                    cmd = if fitting(&temp_arena, l, &bcmds, &mut fcmds, pos, width, ind, |_| {
-                        true
-                    }) {
+                    let l = l.doc(allocator);
+                    let r = r.doc(allocator);
+                    cmd = if fitting(
+                        &temp_arena,
+                        allocator,
+                        l,
+                        &bcmds,
+                        &mut fcmds,
+                        pos,
+                        width,
+                        ind,
+                        |_| true,
+                    ) {
                         (ind, mode, l)
                     } else {
                         (ind, mode, r)
@@ -369,11 +394,11 @@ where
                     continue;
                 }
                 Doc::Column(ref f) => {
-                    cmd = (ind, mode, temp_arena.alloc(f(pos)));
+                    cmd = (ind, mode, temp_arena.alloc(f(pos)).doc(allocator));
                     continue;
                 }
                 Doc::Nesting(ref f) => {
-                    cmd = (ind, mode, temp_arena.alloc(f(ind)));
+                    cmd = (ind, mode, temp_arena.alloc(f(ind)).doc(allocator));
                     continue;
                 }
             }
