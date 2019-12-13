@@ -1428,4 +1428,52 @@ mod tests {
 
         test!(usize::max_value(), doc, "test test");
     }
+
+    pub struct TestWriter<W> {
+        upstream: W,
+    }
+
+    impl<W> TestWriter<W> {
+        pub fn new(upstream: W) -> Self {
+            Self { upstream }
+        }
+    }
+
+    impl<W> Render for TestWriter<W>
+    where
+        W: Render,
+    {
+        type Error = W::Error;
+
+        fn write_str(&mut self, s: &str) -> Result<usize, W::Error> {
+            self.upstream.write_str(s)
+        }
+
+        fn write_str_all(&mut self, s: &str) -> Result<(), W::Error> {
+            self.upstream.write_str_all(s)
+        }
+    }
+
+    impl<W> RenderAnnotated<()> for TestWriter<W>
+    where
+        W: Render,
+    {
+        fn push_annotation(&mut self, _: &()) -> Result<(), Self::Error> {
+            self.upstream.write_str_all("[")
+        }
+
+        fn pop_annotation(&mut self) -> Result<(), Self::Error> {
+            self.upstream.write_str_all("]")
+        }
+    }
+
+    #[test]
+    fn annotations() {
+        let actual = BoxDoc::text("abc").annotate(()).annotate(());
+        let mut s = String::new();
+        actual
+            .render_raw(70, &mut TestWriter::new(FmtWrite::new(&mut s)))
+            .unwrap();
+        difference::assert_diff!(&s, "[[abc]]", "\n", 0);
+    }
 }
