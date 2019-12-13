@@ -380,7 +380,7 @@ where
 
             break;
         }
-        if annotation_levels.last() == Some(&bcmds.len()) {
+        while annotation_levels.last() == Some(&bcmds.len()) {
             annotation_levels.pop();
             out.pop_annotation()?;
         }
