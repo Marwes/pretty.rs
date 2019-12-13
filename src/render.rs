@@ -261,6 +261,12 @@ where
                             return false;
                         }
                     }
+                    Doc::SmallText(ref str) => {
+                        pos += str.len();
+                        if pos > width {
+                            return false;
+                        }
+                    }
                     Doc::FlatAlt(ref b, ref f) => {
                         doc = match mode {
                             Mode::Break => b,
@@ -359,6 +365,10 @@ where
                     pos += s.len();
                 }
                 Doc::BorrowedText(ref s) => {
+                    out.write_str_all(s)?;
+                    pos += s.len();
+                }
+                Doc::SmallText(ref s) => {
                     out.write_str_all(s)?;
                     pos += s.len();
                 }
