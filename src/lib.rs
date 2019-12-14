@@ -163,12 +163,16 @@ pub enum Doc<'a, T: DocPtr<'a, A>, A = ()> {
     FlatAlt(T, T),
     Nest(isize, T),
     Line,
-    Text(Cow<'a, str>),
+    OwnedText(Box<str>),
+    BorrowedText(&'a str),
+    SmallText(SmallText),
     Annotated(A, T),
     Union(T, T),
     Column(T::ColumnFn),
     Nesting(T::ColumnFn),
 }
+
+pub type SmallText = arrayvec::ArrayString<[u8; 22]>;
 
 impl<'a, T, A> fmt::Debug for Doc<'a, T, A>
 where
@@ -185,7 +189,9 @@ where
             Doc::Group(ref doc) => f.debug_tuple("Group").field(doc).finish(),
             Doc::Nest(off, ref doc) => f.debug_tuple("Nest").field(&off).field(doc).finish(),
             Doc::Line => f.debug_tuple("Line").finish(),
-            Doc::Text(ref s) => f.debug_tuple("Text").field(s).finish(),
+            Doc::OwnedText(ref s) => f.debug_tuple("Text").field(s).finish(),
+            Doc::BorrowedText(ref s) => f.debug_tuple("Text").field(s).finish(),
+            Doc::SmallText(ref s) => f.debug_tuple("Text").field(s).finish(),
             Doc::Annotated(ref ann, ref doc) => {
                 f.debug_tuple("Annotated").field(ann).field(doc).finish()
             }
@@ -350,6 +356,28 @@ macro_rules! impl_doc {
     };
 }
 
+enum FmtText {
+    Small(SmallText),
+    Large(String),
+}
+
+impl fmt::Write for FmtText {
+    fn write_str(&mut self, s: &str) -> fmt::Result {
+        match self {
+            FmtText::Small(buf) => {
+                if let Err(_) = buf.try_push_str(s) {
+                    let mut new_str = String::with_capacity(buf.len() + s.len());
+                    new_str.push_str(buf);
+                    new_str.push_str(s);
+                    *self = FmtText::Large(new_str);
+                }
+            }
+            FmtText::Large(buf) => buf.push_str(s),
+        }
+        Ok(())
+    }
+}
+
 macro_rules! impl_doc_methods {
     ($name: ident ( $($params: tt)* ) where ( $($where_: tt)* ) where ( $($where_2: tt)* )) => {
         impl< $($params)* > $name< $($params)* >
@@ -365,8 +393,14 @@ macro_rules! impl_doc_methods {
             ///
             /// The given text must not contain line breaks.
             #[inline]
-            pub fn as_string<U: ToString>(data: U) -> Self {
-                Self::text(data.to_string())
+            pub fn as_string<U: fmt::Display>(data: U) -> Self {
+                use std::fmt::Write;
+                let mut buf = FmtText::Small(SmallText::new());
+                write!(buf, "{}", data).unwrap();
+                (match buf {
+                    FmtText::Small(b) => Doc::SmallText(b),
+                    FmtText::Large(b) => Doc::OwnedText(b.into()),
+                }).into()
             }
 
             /// A single hardline.
@@ -378,12 +412,15 @@ macro_rules! impl_doc_methods {
             /// The given text, which must not contain line breaks.
             #[inline]
             pub fn text<U: Into<Cow<'a, str>>>(data: U) -> Self {
-                Doc::Text(data.into()).into()
+                match data.into() {
+                    Cow::Owned(t) => Doc::OwnedText(t.into()).into(),
+                    Cow::Borrowed(t) => Doc::BorrowedText(t).into(),
+                }
             }
 
             #[inline]
             pub fn space() -> Self {
-                Doc::Text(" ".into()).into()
+                Doc::BorrowedText(" ").into()
             }
         }
 
@@ -455,7 +492,7 @@ where
     S: Into<Cow<'a, str>>,
 {
     fn from(s: S) -> Doc<'a, T, A> {
-        Doc::Text(s.into())
+        Doc::text(s)
     }
 }
 
@@ -666,8 +703,8 @@ where
     ///
     /// The given text must not contain line breaks.
     #[inline]
-    fn as_string<U: ToString>(&'a self, data: U) -> DocBuilder<'a, Self, A> {
-        self.text(data.to_string())
+    fn as_string<U: fmt::Display>(&'a self, data: U) -> DocBuilder<'a, Self, A> {
+        DocBuilder(self, Doc::as_string(data.to_string()).into())
     }
 
     /// Allocate a document containing the given text.
@@ -675,7 +712,7 @@ where
     /// The given text must not contain line breaks.
     #[inline]
     fn text<U: Into<Cow<'a, str>>>(&'a self, data: U) -> DocBuilder<'a, Self, A> {
-        DocBuilder(self, Doc::Text(data.into()).into())
+        DocBuilder(self, Doc::text(data).into())
     }
 
     /// Allocate a document concatenating the given documents.
@@ -819,7 +856,7 @@ where
     S: Into<Cow<'a, str>>,
 {
     fn from(s: S) -> Self {
-        BuildDoc::Doc(Doc::Text(s.into()))
+        BuildDoc::Doc(Doc::text(s))
     }
 }
 
@@ -1101,7 +1138,7 @@ where
 }
 
 /// Newtype wrapper for `&Doc`
-pub struct RefDoc<'a, A>(&'a Doc<'a, RefDoc<'a, A>, A>);
+pub struct RefDoc<'a, A = ()>(&'a Doc<'a, RefDoc<'a, A>, A>);
 
 impl<A> Copy for RefDoc<'_, A> {}
 impl<A> Clone for RefDoc<'_, A> {
@@ -1209,8 +1246,8 @@ impl<'a, A> DocAllocator<'a, A> for Arena<'a, A> {
             Doc::Nil => &Doc::Nil,
             Doc::Line => &Doc::Line,
             // line()
-            Doc::FlatAlt(RefDoc(Doc::Line), RefDoc(Doc::Text(Cow::Borrowed(" ")))) => {
-                &Doc::FlatAlt(RefDoc(&Doc::Line), RefDoc(&Doc::Text(Cow::Borrowed(" "))))
+            Doc::FlatAlt(RefDoc(Doc::Line), RefDoc(Doc::BorrowedText(" "))) => {
+                &Doc::FlatAlt(RefDoc(&Doc::Line), RefDoc(&Doc::BorrowedText(" ")))
             }
             // line_()
             Doc::FlatAlt(RefDoc(Doc::Line), RefDoc(Doc::Nil)) => {
@@ -1240,6 +1277,13 @@ mod tests {
     use difference;
 
     use super::*;
+
+    #[cfg(target_pointer_width = "64")]
+    #[test]
+    fn doc_size() {
+        // Safeguard against accidentally growing Doc
+        assert_eq!(8 * 3, std::mem::size_of::<Doc<RefDoc>>());
+    }
 
     macro_rules! test {
         ($size:expr, $actual:expr, $expected:expr) => {
