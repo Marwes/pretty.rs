@@ -1138,7 +1138,7 @@ where
 }
 
 /// Newtype wrapper for `&Doc`
-pub struct RefDoc<'a, A = ()>(&'a Doc<'a, RefDoc<'a, A>, A>);
+pub struct RefDoc<'a, A = ()>(pub &'a Doc<'a, RefDoc<'a, A>, A>);
 
 impl<A> Copy for RefDoc<'_, A> {}
 impl<A> Clone for RefDoc<'_, A> {
