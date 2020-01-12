@@ -15,11 +15,11 @@ features = ["termcolor"]
 
 [dependencies]
 arrayvec = "0.5"
-typed-arena = "1.2.0"
-termcolor = { version = "0.3", optional = true }
+typed-arena = "2.0.0"
+termcolor = { version = "1.1.0", optional = true }
 
 [dev-dependencies]
-tempfile = "2.1.4"
+tempfile = "3.1.0"
 difference = "2"
 criterion = "0.3"
 
