@@ -163,6 +163,41 @@ macro_rules! make_spaces {
 
 pub(crate) const SPACES: &str = make_spaces!(,,,,,,,,,,);
 
+fn append_docs2<'a, 'd, T, A>(
+    ldoc: &'d Doc<'a, T, A>,
+    rdoc: &'d Doc<'a, T, A>,
+    mut consumer: impl FnMut(&'d Doc<'a, T, A>),
+) -> &'d Doc<'a, T, A>
+where
+    T: DocPtr<'a, A>,
+{
+    let d = append_docs(rdoc, &mut consumer);
+    consumer(d);
+    append_docs(ldoc, &mut consumer)
+}
+
+fn append_docs<'a, 'd, T, A>(
+    mut doc: &'d Doc<'a, T, A>,
+    consumer: &mut impl FnMut(&'d Doc<'a, T, A>),
+) -> &'d Doc<'a, T, A>
+where
+    T: DocPtr<'a, A>,
+{
+    loop {
+        // Since appended documents often appear in sequence on the left side we
+        // gain a slight performance increase by batching these pushes (avoiding
+        // to push and directly pop `Append` documents)
+        match doc {
+            Doc::Append(l, r) => {
+                let d = append_docs(r, consumer);
+                consumer(d);
+                doc = l;
+            }
+            _ => return doc,
+        }
+    }
+}
+
 #[inline]
 pub fn best<'a, W, T, A>(doc: &Doc<'a, T, A>, width: usize, out: &mut W) -> Result<(), W::Error>
 where
@@ -235,15 +270,7 @@ where
                 match *doc {
                     Doc::Nil => {}
                     Doc::Append(ref ldoc, ref rdoc) => {
-                        fcmds.push(rdoc);
-                        // Since appended documents often appear in sequence on the left side we
-                        // gain a slight performance increase by batching these pushes (avoiding
-                        // to push and directly pop `Append` documents)
-                        doc = ldoc;
-                        while let Doc::Append(ref l, ref r) = *doc {
-                            fcmds.push(r);
-                            doc = l;
-                        }
+                        doc = append_docs2(ldoc, rdoc, |doc| fcmds.push(doc));
                         continue;
                     }
                     // Newlines inside the group makes it not fit, but those outside lets it
@@ -309,24 +336,14 @@ where
             match *doc {
                 Doc::Nil => {}
                 Doc::Append(ref ldoc, ref rdoc) => {
-                    bcmds.push((ind, mode, rdoc));
-                    let mut doc = ldoc;
-                    while let Doc::Append(ref l, ref r) = **doc {
-                        bcmds.push((ind, mode, r));
-                        doc = l;
-                    }
-                    cmd = (ind, mode, doc);
+                    cmd.2 = append_docs2(ldoc, rdoc, |doc| bcmds.push((ind, mode, doc)));
                     continue;
                 }
                 Doc::FlatAlt(ref b, ref f) => {
-                    cmd = (
-                        ind,
-                        mode,
-                        match mode {
-                            Mode::Break => b,
-                            Mode::Flat => f,
-                        },
-                    );
+                    cmd.2 = match mode {
+                        Mode::Break => b,
+                        Mode::Flat => f,
+                    };
                     continue;
                 }
                 Doc::Group(ref doc) => match mode {
@@ -375,25 +392,25 @@ where
                 Doc::Annotated(ref ann, ref doc) => {
                     out.push_annotation(ann)?;
                     annotation_levels.push(bcmds.len());
-                    cmd = (ind, mode, doc);
+                    cmd.2 = doc;
                     continue;
                 }
                 Doc::Union(ref l, ref r) => {
-                    cmd = if fitting(&temp_arena, l, &bcmds, &mut fcmds, pos, width, ind, |_| {
+                    cmd.2 = if fitting(&temp_arena, l, &bcmds, &mut fcmds, pos, width, ind, |_| {
                         true
                     }) {
-                        (ind, mode, l)
+                        l
                     } else {
-                        (ind, mode, r)
+                        r
                     };
                     continue;
                 }
                 Doc::Column(ref f) => {
-                    cmd = (ind, mode, temp_arena.alloc(f(pos)));
+                    cmd.2 = temp_arena.alloc(f(pos));
                     continue;
                 }
                 Doc::Nesting(ref f) => {
-                    cmd = (ind, mode, temp_arena.alloc(f(ind)));
+                    cmd.2 = temp_arena.alloc(f(ind));
                     continue;
                 }
             }
