@@ -352,6 +352,17 @@ macro_rules! impl_doc {
             {
                 DocBuilder(&$allocator, self.into()).union(other).into_doc()
             }
+
+            #[inline]
+            pub fn softline() -> Self {
+                Self::line().group()
+            }
+
+            /// A `softline_` acts like `nil` if the document fits the page, otherwise like `line_`
+            #[inline]
+            pub fn softline_() -> Self {
+                Self::line_().group()
+            }
         }
     };
 }
@@ -1278,6 +1289,17 @@ mod tests {
 
     use super::*;
 
+    macro_rules! chain {
+        ($first: expr $(, $rest: expr)* $(,)?) => {{
+            #[allow(unused_mut)]
+            let mut doc = DocBuilder(&BoxAllocator, $first.into());
+            $(
+                doc = doc.append($rest);
+            )*
+            doc.into_doc()
+        }}
+    }
+
     #[cfg(target_pointer_width = "64")]
     #[test]
     fn doc_size() {
@@ -1413,49 +1435,71 @@ mod tests {
         test!(doc, "test\ntest");
     }
 
+    fn hang(
+        from: BoxDoc<'static, ()>,
+        body_whitespace: BoxDoc<'static, ()>,
+        body: BoxDoc<'static, ()>,
+        trailer: BoxDoc<'static, ()>,
+    ) -> BoxDoc<'static, ()> {
+        let body1 = body_whitespace
+            .append(body.clone())
+            .nest(2)
+            .group()
+            .append(trailer.clone());
+        let body2 = BoxDoc::hardline()
+            .append(body.clone())
+            .nest(2)
+            .group()
+            .append(trailer.clone());
+
+        let single = from.clone().append(body1.clone()).group();
+
+        let hang = from.clone().append(body2).group();
+
+        let break_all = from.append(body1).group().nest(2);
+
+        BoxDoc::group(single.union(hang.union(break_all)))
+    }
+
+    #[test]
+    fn hang_lambda() {
+        let from = chain![
+            chain!["let", BoxDoc::line(), "x", BoxDoc::line(), "="].group(),
+            BoxDoc::line(),
+            "\\y ->",
+        ]
+        .group();
+
+        let body = chain!["y"].nest(2).group();
+
+        let trailer = BoxDoc::nil();
+
+        let doc = hang(from, BoxDoc::line(), body, trailer);
+
+        test!(doc, "let x = \\y -> y");
+        test!(8, doc, "let x =\n  \\y ->\n    y");
+        test!(14, doc, "let x = \\y ->\n  y");
+    }
+
     #[test]
     fn union() {
-        let arg: BoxDoc<()> = BoxDoc::text("(");
-        let tuple = |line: BoxDoc<'static, ()>| {
-            line.append(BoxDoc::text("x").append(",").group())
-                .append(BoxDoc::line())
-                .append(BoxDoc::text("1234567890").append(",").group())
-                .nest(2)
-                .append(BoxDoc::line_())
-                .append(")")
-        };
+        let from = chain![
+            chain!["let", BoxDoc::line(), "x", BoxDoc::line(), "="].group(),
+            BoxDoc::line(),
+            "(",
+        ]
+        .group();
 
-        let from = BoxDoc::text("let")
-            .append(BoxDoc::line())
-            .append(BoxDoc::text("x"))
-            .append(BoxDoc::line())
-            .append(BoxDoc::text("="))
-            .group();
+        let body = chain![
+            chain!["x", ","].group(),
+            BoxDoc::line(),
+            chain!["1234567890", ","].group()
+        ]
+        .group();
 
-        let single = from
-            .clone()
-            .append(BoxDoc::line())
-            .append(arg.clone())
-            .group()
-            .append(tuple(BoxDoc::line_()))
-            .group();
+        let trailer = BoxDoc::line_().append(")");
 
-        let hang = from
-            .clone()
-            .append(BoxDoc::line())
-            .append(arg.clone())
-            .group()
-            .append(tuple(BoxDoc::hardline()))
-            .group();
-
-        let break_all = from
-            .append(BoxDoc::line())
-            .append(arg.clone())
-            .append(tuple(BoxDoc::line()))
-            .group()
-            .nest(2);
-
-        let doc = BoxDoc::group(single.union(hang.union(break_all)));
+        let doc = hang(from, BoxDoc::line_(), body, trailer);
 
         test!(doc, "let x = (x, 1234567890,)");
         test!(8, doc, "let x =\n  (\n    x,\n    1234567890,\n  )");
