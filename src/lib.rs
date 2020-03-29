@@ -830,13 +830,23 @@ where
 }
 
 /// Either a `Doc` or a pointer to a `Doc` (`D`)
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub enum BuildDoc<'a, D, A>
 where
     D: DocPtr<'a, A>,
 {
     DocPtr(D),
     Doc(Doc<'a, D, A>),
+}
+
+impl<'a, D, A> fmt::Debug for BuildDoc<'a, D, A>
+where
+    D: DocPtr<'a, A> + fmt::Debug,
+    A: fmt::Debug,
+{
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        (**self).fmt(f)
+    }
 }
 
 impl<'a, D, A> Deref for BuildDoc<'a, D, A>
@@ -954,6 +964,9 @@ where
     /// line.
     #[inline]
     pub fn group(self) -> DocBuilder<'a, D, A> {
+        if let Doc::Group(_) = *self.1 {
+            return self;
+        }
         let DocBuilder(allocator, this) = self;
         DocBuilder(allocator, Doc::Group(allocator.alloc_cow(this)).into())
     }
