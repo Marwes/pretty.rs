@@ -174,6 +174,20 @@ pub enum Doc<'a, T: DocPtr<'a, A>, A = ()> {
 
 pub type SmallText = arrayvec::ArrayString<[u8; 22]>;
 
+fn append_docs<'a, 'd, T, A>(doc: &'d Doc<'a, T, A>, consumer: &mut impl FnMut(&'d Doc<'a, T, A>))
+where
+    T: DocPtr<'a, A> + fmt::Debug,
+    A: fmt::Debug,
+{
+    match doc {
+        Doc::Append(l, r) => {
+            append_docs(l, consumer);
+            append_docs(r, consumer);
+        }
+        _ => consumer(doc),
+    }
+}
+
 impl<'a, T, A> fmt::Debug for Doc<'a, T, A>
 where
     T: DocPtr<'a, A> + fmt::Debug,
@@ -182,16 +196,20 @@ where
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Doc::Nil => f.debug_tuple("Nil").finish(),
-            Doc::Append(ref ldoc, ref rdoc) => {
-                f.debug_tuple("Append").field(ldoc).field(rdoc).finish()
+            Doc::Append(..) => {
+                let mut f = f.debug_list();
+                append_docs(self, &mut |doc| {
+                    f.entry(doc);
+                });
+                f.finish()
             }
             Doc::FlatAlt(ref x, ref y) => f.debug_tuple("FlatAlt").field(x).field(y).finish(),
             Doc::Group(ref doc) => f.debug_tuple("Group").field(doc).finish(),
             Doc::Nest(off, ref doc) => f.debug_tuple("Nest").field(&off).field(doc).finish(),
             Doc::Line => f.debug_tuple("Line").finish(),
-            Doc::OwnedText(ref s) => f.debug_tuple("Text").field(s).finish(),
-            Doc::BorrowedText(ref s) => f.debug_tuple("Text").field(s).finish(),
-            Doc::SmallText(ref s) => f.debug_tuple("Text").field(s).finish(),
+            Doc::OwnedText(ref s) => s.fmt(f),
+            Doc::BorrowedText(ref s) => s.fmt(f),
+            Doc::SmallText(ref s) => s.fmt(f),
             Doc::Annotated(ref ann, ref doc) => {
                 f.debug_tuple("Annotated").field(ann).field(doc).finish()
             }
