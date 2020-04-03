@@ -157,9 +157,9 @@ where
 }
 
 macro_rules! make_spaces {
-            () => { "" };
-            ($s: tt $($t: tt)*) => { concat!("          ", make_spaces!($($t)*)) };
-        }
+    () => { "" };
+    ($s: tt $($t: tt)*) => { concat!("          ", make_spaces!($($t)*)) };
+}
 
 pub(crate) const SPACES: &str = make_spaces!(,,,,,,,,,,);
 
@@ -346,29 +346,27 @@ where
                     };
                     continue;
                 }
-                Doc::Group(ref doc) => match mode {
-                    Mode::Flat => {
-                        cmd = (ind, Mode::Flat, doc);
-                        continue;
+                Doc::Group(ref doc) => {
+                    match mode {
+                        Mode::Flat => (),
+                        Mode::Break => {
+                            if fitting(
+                                &temp_arena,
+                                doc,
+                                &bcmds,
+                                &mut fcmds,
+                                pos,
+                                width,
+                                ind,
+                                |mode| mode == Mode::Break,
+                            ) {
+                                cmd.1 = Mode::Flat;
+                            }
+                        }
                     }
-                    Mode::Break => {
-                        cmd = if fitting(
-                            &temp_arena,
-                            doc,
-                            &bcmds,
-                            &mut fcmds,
-                            pos,
-                            width,
-                            ind,
-                            |mode| mode == Mode::Break,
-                        ) {
-                            (ind, Mode::Flat, &**doc)
-                        } else {
-                            (ind, Mode::Break, doc)
-                        };
-                        continue;
-                    }
-                },
+                    cmd.2 = doc;
+                    continue;
+                }
                 Doc::Nest(off, ref doc) => {
                     cmd = ((ind as isize).saturating_add(off) as usize, mode, doc);
                     continue;

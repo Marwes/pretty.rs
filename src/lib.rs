@@ -174,17 +174,18 @@ pub enum Doc<'a, T: DocPtr<'a, A>, A = ()> {
 
 pub type SmallText = arrayvec::ArrayString<[u8; 22]>;
 
-fn append_docs<'a, 'd, T, A>(doc: &'d Doc<'a, T, A>, consumer: &mut impl FnMut(&'d Doc<'a, T, A>))
+fn append_docs<'a, 'd, T, A>(mut doc: &'d Doc<'a, T, A>, consumer: &mut impl FnMut(&'d Doc<'a, T, A>))
 where
-    T: DocPtr<'a, A> + fmt::Debug,
-    A: fmt::Debug,
+    T: DocPtr<'a, A>,
 {
-    match doc {
-        Doc::Append(l, r) => {
-            append_docs(l, consumer);
-            append_docs(r, consumer);
+    loop {
+        match doc {
+            Doc::Append(l, r) => {
+                append_docs(l, consumer);
+                doc = r;
+            }
+            _ => break consumer(doc),
         }
-        _ => consumer(doc),
     }
 }
 
