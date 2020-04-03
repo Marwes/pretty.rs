@@ -381,6 +381,16 @@ macro_rules! impl_doc {
             pub fn softline_() -> Self {
                 Self::line_().group()
             }
+
+            #[inline]
+            pub fn column(f: impl Fn(usize) -> Self + 'static) -> Self {
+                DocBuilder(&$allocator, Doc::Column($allocator.alloc_column_fn(f)).into()).into_doc()
+            }
+
+            #[inline]
+            pub fn nesting(f: impl Fn(usize) -> Self + 'static) -> Self {
+                DocBuilder(&$allocator, Doc::Nesting($allocator.alloc_column_fn(f)).into()).into_doc()
+            }
         }
     };
 }
@@ -825,7 +835,7 @@ where
         Self::Doc: Clone,
         A: Clone,
     {
-        self.intersperse(text.split(char::is_whitespace), self.line().group())
+        self.intersperse(text.split(char::is_whitespace), self.softline())
     }
 }
 
@@ -964,11 +974,13 @@ where
     /// line.
     #[inline]
     pub fn group(self) -> DocBuilder<'a, D, A> {
-        if let Doc::Group(_) = *self.1 {
-            return self;
+        match *self.1 {
+            Doc::Group(_) | Doc::Nil => self,
+            _ => {
+                let DocBuilder(allocator, this) = self;
+                DocBuilder(allocator, Doc::Group(allocator.alloc_cow(this)).into())
+            }
         }
-        let DocBuilder(allocator, this) = self;
-        DocBuilder(allocator, Doc::Group(allocator.alloc_cow(this)).into())
     }
 
     /// Increase the indentation level of this document.
@@ -1295,6 +1307,17 @@ impl<'a, A> DocAllocator<'a, A> for Arena<'a, A> {
             Doc::FlatAlt(RefDoc(Doc::Line), RefDoc(Doc::Nil)) => {
                 &Doc::FlatAlt(RefDoc(&Doc::Line), RefDoc(&Doc::Nil))
             }
+            // softline()
+            Doc::Group(RefDoc(Doc::FlatAlt(RefDoc(Doc::Line), RefDoc(Doc::BorrowedText(" "))))) => {
+                &Doc::Group(RefDoc(&Doc::FlatAlt(
+                    RefDoc(&Doc::Line),
+                    RefDoc(&Doc::BorrowedText(" ")),
+                )))
+            }
+            // softline_()
+            Doc::Group(RefDoc(Doc::FlatAlt(RefDoc(Doc::Line), RefDoc(Doc::Nil)))) => {
+                &Doc::Group(RefDoc(&Doc::FlatAlt(RefDoc(&Doc::Line), RefDoc(&Doc::Nil))))
+            }
             _ => self.docs.alloc(doc),
         })
     }
@@ -1472,40 +1495,46 @@ mod tests {
         body: BoxDoc<'static, ()>,
         trailer: BoxDoc<'static, ()>,
     ) -> BoxDoc<'static, ()> {
-        let body1 = body_whitespace
-            .append(body.clone())
-            .nest(2)
-            .group()
-            .append(trailer.clone());
-        let body2 = BoxDoc::hardline()
-            .append(body.clone())
-            .nest(2)
-            .group()
-            .append(trailer.clone());
+        chain![from, nest_on_line_(body_whitespace.append(body)), trailer].group()
+    }
 
-        let single = from.clone().append(body1.clone()).group();
+    // Only nests `doc` if the prepended `softline_` becomes a newline
+    fn nest_on_line_(doc: BoxDoc<'static, ()>) -> BoxDoc<'static, ()> {
+        BoxDoc::softline_().append(BoxDoc::nesting(move |n| {
+            let doc = doc.clone();
+            BoxDoc::column(move |c| {
+                if n == c {
+                    BoxDoc::text("  ").append(doc.clone()).nest(2)
+                } else {
+                    doc.clone()
+                }
+            })
+        }))
+    }
 
-        let hang = from.clone().append(body2).group();
-
-        let break_all = from.append(body1).group().nest(2);
-
-        BoxDoc::group(single.union(hang.union(break_all)))
+    fn nest_on_line(doc: BoxDoc<'static, ()>) -> BoxDoc<'static, ()> {
+        BoxDoc::softline().append(BoxDoc::nesting(move |n| {
+            let doc = doc.clone();
+            BoxDoc::column(move |c| {
+                if n == c {
+                    BoxDoc::text("  ").append(doc.clone()).nest(2)
+                } else {
+                    doc.clone()
+                }
+            })
+        }))
     }
 
     #[test]
     fn hang_lambda() {
-        let from = chain![
+        let doc = chain![
             chain!["let", BoxDoc::line(), "x", BoxDoc::line(), "="].group(),
-            BoxDoc::line(),
-            "\\y ->",
+            nest_on_line(chain![
+                "\\y ->",
+                chain![BoxDoc::line(), "y"].nest(2).group()
+            ]),
         ]
         .group();
-
-        let body = chain!["y"].nest(2).group();
-
-        let trailer = BoxDoc::nil();
-
-        let doc = hang(from, BoxDoc::line(), body, trailer);
 
         test!(doc, "let x = \\y -> y");
         test!(8, doc, "let x =\n  \\y ->\n    y");
@@ -1513,24 +1542,39 @@ mod tests {
     }
 
     #[test]
-    fn union() {
-        let from = chain![
+    fn hang_comment() {
+        let body = chain!["y"].nest(2).group();
+        let doc = chain![
             chain!["let", BoxDoc::line(), "x", BoxDoc::line(), "="].group(),
-            BoxDoc::line(),
-            "(",
+            nest_on_line(chain![
+                "\\y ->",
+                nest_on_line(chain!["// abc", BoxDoc::hardline(), body])
+            ]),
         ]
         .group();
 
-        let body = chain![
-            chain!["x", ","].group(),
-            BoxDoc::line(),
-            chain!["1234567890", ","].group()
+        test!(8, doc, "let x =\n  \\y ->\n    // abc\n    y");
+        test!(14, doc, "let x = \\y ->\n  // abc\n  y");
+    }
+
+    #[test]
+    fn union() {
+        let doc = chain![
+            chain!["let", BoxDoc::line(), "x", BoxDoc::line(), "="].group(),
+            nest_on_line(chain![
+                "(",
+                chain![
+                    BoxDoc::line_(),
+                    chain!["x", ","].group(),
+                    BoxDoc::line(),
+                    chain!["1234567890", ","].group()
+                ]
+                .nest(2)
+                .group(),
+                BoxDoc::line_().append(")"),
+            ])
         ]
         .group();
-
-        let trailer = BoxDoc::line_().append(")");
-
-        let doc = hang(from, BoxDoc::line_(), body, trailer);
 
         test!(doc, "let x = (x, 1234567890,)");
         test!(8, doc, "let x =\n  (\n    x,\n    1234567890,\n  )");
