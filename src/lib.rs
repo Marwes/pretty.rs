@@ -174,8 +174,10 @@ pub enum Doc<'a, T: DocPtr<'a, A>, A = ()> {
 
 pub type SmallText = arrayvec::ArrayString<[u8; 22]>;
 
-fn append_docs<'a, 'd, T, A>(mut doc: &'d Doc<'a, T, A>, consumer: &mut impl FnMut(&'d Doc<'a, T, A>))
-where
+fn append_docs<'a, 'd, T, A>(
+    mut doc: &'d Doc<'a, T, A>,
+    consumer: &mut impl FnMut(&'d Doc<'a, T, A>),
+) where
     T: DocPtr<'a, A>,
 {
     loop {
@@ -580,7 +582,8 @@ where
     #[inline]
     pub fn render_raw<W>(&self, width: usize, out: &mut W) -> Result<(), W::Error>
     where
-        W: ?Sized + render::RenderAnnotated<A>,
+        for<'b> W: render::RenderAnnotated<'b, A>,
+        W: ?Sized,
     {
         render::best(self, width, out)
     }
@@ -1490,29 +1493,6 @@ mod tests {
         test!(doc, "test\ntest");
     }
 
-    fn hang(
-        from: BoxDoc<'static, ()>,
-        body_whitespace: BoxDoc<'static, ()>,
-        body: BoxDoc<'static, ()>,
-        trailer: BoxDoc<'static, ()>,
-    ) -> BoxDoc<'static, ()> {
-        chain![from, nest_on_line_(body_whitespace.append(body)), trailer].group()
-    }
-
-    // Only nests `doc` if the prepended `softline_` becomes a newline
-    fn nest_on_line_(doc: BoxDoc<'static, ()>) -> BoxDoc<'static, ()> {
-        BoxDoc::softline_().append(BoxDoc::nesting(move |n| {
-            let doc = doc.clone();
-            BoxDoc::column(move |c| {
-                if n == c {
-                    BoxDoc::text("  ").append(doc.clone()).nest(2)
-                } else {
-                    doc.clone()
-                }
-            })
-        }))
-    }
-
     fn nest_on_line(doc: BoxDoc<'static, ()>) -> BoxDoc<'static, ()> {
         BoxDoc::softline().append(BoxDoc::nesting(move |n| {
             let doc = doc.clone();
@@ -1582,6 +1562,76 @@ mod tests {
         test!(14, doc, "let x = (\n  x,\n  1234567890,\n)");
     }
 
+    fn hang2(
+        from: BoxDoc<'static, ()>,
+        body_whitespace: BoxDoc<'static, ()>,
+        body: BoxDoc<'static, ()>,
+        trailer: BoxDoc<'static, ()>,
+    ) -> BoxDoc<'static, ()> {
+        let body1 = body_whitespace
+            .append(body.clone())
+            .nest(2)
+            .group()
+            .append(trailer.clone());
+        let body2 = BoxDoc::hardline()
+            .append(body.clone())
+            .nest(2)
+            .group()
+            .append(trailer.clone());
+
+        let single = from.clone().append(body1.clone()).group();
+
+        let hang = from.clone().append(body2).group();
+
+        let break_all = from.append(body1).group().nest(2);
+
+        BoxDoc::group(single.union(hang.union(break_all)))
+    }
+
+    #[test]
+    fn hang_lambda2() {
+        let from = chain![
+            chain!["let", BoxDoc::line(), "x", BoxDoc::line(), "="].group(),
+            BoxDoc::line(),
+            "\\y ->",
+        ]
+        .group();
+
+        let body = chain!["y"].group();
+
+        let trailer = BoxDoc::nil();
+
+        let doc = hang2(from, BoxDoc::line(), body, trailer);
+        eprintln!("{:#?}", doc);
+
+        test!(doc, "let x = \\y -> y");
+        test!(14, doc, "let x = \\y ->\n  y");
+    }
+
+    #[test]
+    fn union2() {
+        let from = chain![
+            chain!["let", BoxDoc::line(), "x", BoxDoc::line(), "="].group(),
+            BoxDoc::line(),
+            "(",
+        ]
+        .group();
+
+        let body = chain![
+            chain!["x", ","].group(),
+            BoxDoc::line(),
+            chain!["1234567890", ","].group()
+        ]
+        .group();
+
+        let trailer = BoxDoc::line_().append(")");
+
+        let doc = hang2(from, BoxDoc::line_(), body, trailer);
+
+        test!(doc, "let x = (x, 1234567890,)");
+        test!(14, doc, "let x = (\n  x,\n  1234567890,\n)");
+    }
+
     #[test]
     fn usize_max_value() {
         let doc: BoxDoc<()> = BoxDoc::group(
@@ -1618,7 +1668,7 @@ mod tests {
         }
     }
 
-    impl<W> RenderAnnotated<()> for TestWriter<W>
+    impl<W> RenderAnnotated<'_, ()> for TestWriter<W>
     where
         W: Render,
     {
