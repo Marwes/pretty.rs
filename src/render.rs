@@ -283,7 +283,9 @@ where
         width,
         temp_arena,
     }
-    .best(0, out)
+    .best(0, out)?;
+
+    Ok(())
 }
 
 #[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
@@ -421,11 +423,12 @@ impl<'d, 'a, T, A> Best<'d, 'a, T, A>
 where
     T: DocPtr<'a, A> + 'a,
 {
-    fn best<W>(&mut self, top: usize, out: &mut W) -> Result<(), W::Error>
+    fn best<W>(&mut self, top: usize, out: &mut W) -> Result<bool, W::Error>
     where
         W: RenderAnnotated<'d, A>,
         W: ?Sized,
     {
+        let mut fits = true;
 
         while top < self.bcmds.len() {
             let mut cmd = self.bcmds.pop().unwrap();
@@ -476,14 +479,17 @@ where
                     Doc::OwnedText(ref s) => {
                         out.write_str_all(s)?;
                         self.pos += s.len();
+                        fits &= self.pos <= self.width;
                     }
                     Doc::BorrowedText(ref s) => {
                         out.write_str_all(s)?;
                         self.pos += s.len();
+                        fits &= self.pos <= self.width;
                     }
                     Doc::SmallText(ref s) => {
                         out.write_str_all(s)?;
                         self.pos += s.len();
+                        fits &= self.pos <= self.width;
                     }
                     Doc::Annotated(ref ann, ref doc) => {
                         out.push_annotation(ann)?;
@@ -501,8 +507,8 @@ where
                         let mut buffer = BufferWrite::new();
 
                         match self.best(bcmds, &mut buffer) {
-                            Ok(()) => buffer.render(out)?,
-                            Err(()) => {
+                            Ok(true) => buffer.render(out)?,
+                            Ok(false) | Err(()) => {
                                 self.pos = pos;
                                 self.bcmds.truncate(bcmds);
                                 self.annotation_levels.truncate(annotation_levels);
@@ -529,6 +535,6 @@ where
             }
         }
 
-        Ok(())
+        Ok(fits)
     }
 }
