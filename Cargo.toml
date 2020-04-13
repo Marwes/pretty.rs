@@ -1,6 +1,6 @@
 [package]
 name = "pretty"
-version = "0.9.1-alpha.0"
+version = "0.10.0"
 authors = [ "Jonathan Sterling <jon@jonmsterling.com>", "Darin Morrison <darinmorrison+git@gmail.com>", "Markus Westerlind <marwes91@gmail.com>"]
 description = "Wadler-style pretty-printing combinators in Rust"
 documentation = "https://docs.rs/pretty/"
