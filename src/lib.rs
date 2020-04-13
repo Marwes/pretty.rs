@@ -170,6 +170,7 @@ pub enum Doc<'a, T: DocPtr<'a, A>, A = ()> {
     Union(T, T),
     Column(T::ColumnFn),
     Nesting(T::ColumnFn),
+    Fail,
 }
 
 pub type SmallText = arrayvec::ArrayString<[u8; 22]>;
@@ -219,6 +220,7 @@ where
             Doc::Union(ref l, ref r) => f.debug_tuple("Union").field(l).field(r).finish(),
             Doc::Column(_) => f.debug_tuple("Column(..)").finish(),
             Doc::Nesting(_) => f.debug_tuple("Nesting(..)").finish(),
+            Doc::Fail => f.debug_tuple("Fail").finish(),
         }
     }
 }
@@ -464,6 +466,11 @@ macro_rules! impl_doc_methods {
             pub fn space() -> Self {
                 Doc::BorrowedText(" ").into()
             }
+
+            #[inline]
+            pub fn fail() -> Self {
+                Doc::Fail.into()
+            }
         }
 
         impl< $($params)* > $name< $($params)* >
@@ -686,6 +693,14 @@ where
     #[inline]
     fn nil(&'a self) -> DocBuilder<'a, Self, A> {
         DocBuilder(self, Doc::Nil.into())
+    }
+
+    /// Fails document rendering immediately.
+    ///
+    /// Primarily used to abort rendering inside the left side of `Union`
+    #[inline]
+    fn fail(&'a self) -> DocBuilder<'a, Self, A> {
+        DocBuilder(self, Doc::Fail.into())
     }
 
     /// Allocate a single hardline.
@@ -1303,6 +1318,7 @@ impl<'a, A> DocAllocator<'a, A> for Arena<'a, A> {
             // Return 'static references for common variants to avoid some allocations
             Doc::Nil => &Doc::Nil,
             Doc::Line => &Doc::Line,
+            Doc::Fail => &Doc::Fail,
             // line()
             Doc::FlatAlt(RefDoc(Doc::Line), RefDoc(Doc::BorrowedText(" "))) => {
                 &Doc::FlatAlt(RefDoc(&Doc::Line), RefDoc(&Doc::BorrowedText(" ")))
@@ -1643,6 +1659,16 @@ mod tests {
         test!(usize::max_value(), doc, "test test");
     }
 
+    #[test]
+    fn fail() {
+        let fail_break: BoxDoc<()> = BoxDoc::fail().flat_alt(Doc::nil());
+
+        let doc = fail_break.append(Doc::text("12345")).group().union("abc");
+
+        test!(5, doc, "12345");
+        test!(4, doc, "abc");
+    }
+
     pub struct TestWriter<W> {
         upstream: W,
     }
@@ -1665,6 +1691,10 @@ mod tests {
 
         fn write_str_all(&mut self, s: &str) -> Result<(), W::Error> {
             self.upstream.write_str_all(s)
+        }
+
+        fn fail_doc(&self) -> Self::Error {
+            self.upstream.fail_doc()
         }
     }
 

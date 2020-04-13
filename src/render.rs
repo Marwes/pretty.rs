@@ -19,6 +19,8 @@ pub trait Render {
         }
         Ok(())
     }
+
+    fn fail_doc(&self) -> Self::Error;
 }
 
 /// Writes to something implementing `std::io::Write`
@@ -45,6 +47,10 @@ where
     fn write_str_all(&mut self, s: &str) -> io::Result<()> {
         self.upstream.write_all(s.as_bytes())
     }
+
+    fn fail_doc(&self) -> Self::Error {
+        io::Error::new(io::ErrorKind::Other, "Document failed to render")
+    }
 }
 
 /// Writes to something implementing `std::fmt::Write`
@@ -70,6 +76,10 @@ where
 
     fn write_str_all(&mut self, s: &str) -> fmt::Result {
         self.upstream.write_str(s)
+    }
+
+    fn fail_doc(&self) -> Self::Error {
+        fmt::Error
     }
 }
 
@@ -134,6 +144,10 @@ where
 
     fn write_str_all(&mut self, s: &str) -> io::Result<()> {
         self.upstream.write_all(s.as_bytes())
+    }
+
+    fn fail_doc(&self) -> Self::Error {
+        io::Error::new(io::ErrorKind::Other, "Document failed to render")
     }
 }
 
@@ -211,6 +225,8 @@ impl<A> Render for BufferWrite<'_, A> {
         self.buffer.push_str(s);
         Ok(())
     }
+
+    fn fail_doc(&self) -> Self::Error {}
 }
 
 impl<'a, A> RenderAnnotated<'a, A> for BufferWrite<'a, A> {
@@ -401,6 +417,7 @@ where
                     doc = next;
                     continue;
                 }
+                Doc::Fail => return false,
             }
             break;
         }
@@ -525,6 +542,7 @@ where
                         cmd.2 = self.temp_arena.alloc(f(ind));
                         continue;
                     }
+                    Doc::Fail => return Err(out.fail_doc()),
                 }
 
                 break;
