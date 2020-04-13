@@ -170,9 +170,27 @@ pub enum Doc<'a, T: DocPtr<'a, A>, A = ()> {
     Union(T, T),
     Column(T::ColumnFn),
     Nesting(T::ColumnFn),
+    Fail,
 }
 
 pub type SmallText = arrayvec::ArrayString<[u8; 22]>;
+
+fn append_docs<'a, 'd, T, A>(
+    mut doc: &'d Doc<'a, T, A>,
+    consumer: &mut impl FnMut(&'d Doc<'a, T, A>),
+) where
+    T: DocPtr<'a, A>,
+{
+    loop {
+        match doc {
+            Doc::Append(l, r) => {
+                append_docs(l, consumer);
+                doc = r;
+            }
+            _ => break consumer(doc),
+        }
+    }
+}
 
 impl<'a, T, A> fmt::Debug for Doc<'a, T, A>
 where
@@ -182,22 +200,27 @@ where
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Doc::Nil => f.debug_tuple("Nil").finish(),
-            Doc::Append(ref ldoc, ref rdoc) => {
-                f.debug_tuple("Append").field(ldoc).field(rdoc).finish()
+            Doc::Append(..) => {
+                let mut f = f.debug_list();
+                append_docs(self, &mut |doc| {
+                    f.entry(doc);
+                });
+                f.finish()
             }
             Doc::FlatAlt(ref x, ref y) => f.debug_tuple("FlatAlt").field(x).field(y).finish(),
             Doc::Group(ref doc) => f.debug_tuple("Group").field(doc).finish(),
             Doc::Nest(off, ref doc) => f.debug_tuple("Nest").field(&off).field(doc).finish(),
             Doc::Line => f.debug_tuple("Line").finish(),
-            Doc::OwnedText(ref s) => f.debug_tuple("Text").field(s).finish(),
-            Doc::BorrowedText(ref s) => f.debug_tuple("Text").field(s).finish(),
-            Doc::SmallText(ref s) => f.debug_tuple("Text").field(s).finish(),
+            Doc::OwnedText(ref s) => s.fmt(f),
+            Doc::BorrowedText(ref s) => s.fmt(f),
+            Doc::SmallText(ref s) => s.fmt(f),
             Doc::Annotated(ref ann, ref doc) => {
                 f.debug_tuple("Annotated").field(ann).field(doc).finish()
             }
             Doc::Union(ref l, ref r) => f.debug_tuple("Union").field(l).field(r).finish(),
             Doc::Column(_) => f.debug_tuple("Column(..)").finish(),
             Doc::Nesting(_) => f.debug_tuple("Nesting(..)").finish(),
+            Doc::Fail => f.debug_tuple("Fail").finish(),
         }
     }
 }
@@ -352,6 +375,27 @@ macro_rules! impl_doc {
             {
                 DocBuilder(&$allocator, self.into()).union(other).into_doc()
             }
+
+            #[inline]
+            pub fn softline() -> Self {
+                Self::line().group()
+            }
+
+            /// A `softline_` acts like `nil` if the document fits the page, otherwise like `line_`
+            #[inline]
+            pub fn softline_() -> Self {
+                Self::line_().group()
+            }
+
+            #[inline]
+            pub fn column(f: impl Fn(usize) -> Self + 'static) -> Self {
+                DocBuilder(&$allocator, Doc::Column($allocator.alloc_column_fn(f)).into()).into_doc()
+            }
+
+            #[inline]
+            pub fn nesting(f: impl Fn(usize) -> Self + 'static) -> Self {
+                DocBuilder(&$allocator, Doc::Nesting($allocator.alloc_column_fn(f)).into()).into_doc()
+            }
         }
     };
 }
@@ -421,6 +465,11 @@ macro_rules! impl_doc_methods {
             #[inline]
             pub fn space() -> Self {
                 Doc::BorrowedText(" ").into()
+            }
+
+            #[inline]
+            pub fn fail() -> Self {
+                Doc::Fail.into()
             }
         }
 
@@ -540,7 +589,8 @@ where
     #[inline]
     pub fn render_raw<W>(&self, width: usize, out: &mut W) -> Result<(), W::Error>
     where
-        W: ?Sized + render::RenderAnnotated<A>,
+        for<'b> W: render::RenderAnnotated<'b, A>,
+        W: ?Sized,
     {
         render::best(self, width, out)
     }
@@ -643,6 +693,14 @@ where
     #[inline]
     fn nil(&'a self) -> DocBuilder<'a, Self, A> {
         DocBuilder(self, Doc::Nil.into())
+    }
+
+    /// Fails document rendering immediately.
+    ///
+    /// Primarily used to abort rendering inside the left side of `Union`
+    #[inline]
+    fn fail(&'a self) -> DocBuilder<'a, Self, A> {
+        DocBuilder(self, Doc::Fail.into())
     }
 
     /// Allocate a single hardline.
@@ -796,18 +854,28 @@ where
         Self::Doc: Clone,
         A: Clone,
     {
-        self.intersperse(text.split(char::is_whitespace), self.line().group())
+        self.intersperse(text.split(char::is_whitespace), self.softline())
     }
 }
 
 /// Either a `Doc` or a pointer to a `Doc` (`D`)
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub enum BuildDoc<'a, D, A>
 where
     D: DocPtr<'a, A>,
 {
     DocPtr(D),
     Doc(Doc<'a, D, A>),
+}
+
+impl<'a, D, A> fmt::Debug for BuildDoc<'a, D, A>
+where
+    D: DocPtr<'a, A> + fmt::Debug,
+    A: fmt::Debug,
+{
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        (**self).fmt(f)
+    }
 }
 
 impl<'a, D, A> Deref for BuildDoc<'a, D, A>
@@ -925,8 +993,13 @@ where
     /// line.
     #[inline]
     pub fn group(self) -> DocBuilder<'a, D, A> {
-        let DocBuilder(allocator, this) = self;
-        DocBuilder(allocator, Doc::Group(allocator.alloc_cow(this)).into())
+        match *self.1 {
+            Doc::Group(_) | Doc::Nil => self,
+            _ => {
+                let DocBuilder(allocator, this) = self;
+                DocBuilder(allocator, Doc::Group(allocator.alloc_cow(this)).into())
+            }
+        }
     }
 
     /// Increase the indentation level of this document.
@@ -1245,6 +1318,7 @@ impl<'a, A> DocAllocator<'a, A> for Arena<'a, A> {
             // Return 'static references for common variants to avoid some allocations
             Doc::Nil => &Doc::Nil,
             Doc::Line => &Doc::Line,
+            Doc::Fail => &Doc::Fail,
             // line()
             Doc::FlatAlt(RefDoc(Doc::Line), RefDoc(Doc::BorrowedText(" "))) => {
                 &Doc::FlatAlt(RefDoc(&Doc::Line), RefDoc(&Doc::BorrowedText(" ")))
@@ -1252,6 +1326,17 @@ impl<'a, A> DocAllocator<'a, A> for Arena<'a, A> {
             // line_()
             Doc::FlatAlt(RefDoc(Doc::Line), RefDoc(Doc::Nil)) => {
                 &Doc::FlatAlt(RefDoc(&Doc::Line), RefDoc(&Doc::Nil))
+            }
+            // softline()
+            Doc::Group(RefDoc(Doc::FlatAlt(RefDoc(Doc::Line), RefDoc(Doc::BorrowedText(" "))))) => {
+                &Doc::Group(RefDoc(&Doc::FlatAlt(
+                    RefDoc(&Doc::Line),
+                    RefDoc(&Doc::BorrowedText(" ")),
+                )))
+            }
+            // softline_()
+            Doc::Group(RefDoc(Doc::FlatAlt(RefDoc(Doc::Line), RefDoc(Doc::Nil)))) => {
+                &Doc::Group(RefDoc(&Doc::FlatAlt(RefDoc(&Doc::Line), RefDoc(&Doc::Nil))))
             }
             _ => self.docs.alloc(doc),
         })
@@ -1277,6 +1362,17 @@ mod tests {
     use difference;
 
     use super::*;
+
+    macro_rules! chain {
+        ($first: expr $(, $rest: expr)* $(,)?) => {{
+            #[allow(unused_mut)]
+            let mut doc = DocBuilder(&BoxAllocator, $first.into());
+            $(
+                doc = doc.append($rest);
+            )*
+            doc.into_doc()
+        }}
+    }
 
     #[cfg(target_pointer_width = "64")]
     #[test]
@@ -1413,52 +1509,142 @@ mod tests {
         test!(doc, "test\ntest");
     }
 
+    fn nest_on_line(doc: BoxDoc<'static, ()>) -> BoxDoc<'static, ()> {
+        BoxDoc::softline().append(BoxDoc::nesting(move |n| {
+            let doc = doc.clone();
+            BoxDoc::column(move |c| {
+                if n == c {
+                    BoxDoc::text("  ").append(doc.clone()).nest(2)
+                } else {
+                    doc.clone()
+                }
+            })
+        }))
+    }
+
+    #[test]
+    fn hang_lambda() {
+        let doc = chain![
+            chain!["let", BoxDoc::line(), "x", BoxDoc::line(), "="].group(),
+            nest_on_line(chain![
+                "\\y ->",
+                chain![BoxDoc::line(), "y"].nest(2).group()
+            ]),
+        ]
+        .group();
+
+        test!(doc, "let x = \\y -> y");
+        test!(8, doc, "let x =\n  \\y ->\n    y");
+        test!(14, doc, "let x = \\y ->\n  y");
+    }
+
+    #[test]
+    fn hang_comment() {
+        let body = chain!["y"].nest(2).group();
+        let doc = chain![
+            chain!["let", BoxDoc::line(), "x", BoxDoc::line(), "="].group(),
+            nest_on_line(chain![
+                "\\y ->",
+                nest_on_line(chain!["// abc", BoxDoc::hardline(), body])
+            ]),
+        ]
+        .group();
+
+        test!(8, doc, "let x =\n  \\y ->\n    // abc\n    y");
+        test!(14, doc, "let x = \\y ->\n  // abc\n  y");
+    }
+
     #[test]
     fn union() {
-        let arg: BoxDoc<()> = BoxDoc::text("(");
-        let tuple = |line: BoxDoc<'static, ()>| {
-            line.append(BoxDoc::text("x").append(",").group())
-                .append(BoxDoc::line())
-                .append(BoxDoc::text("1234567890").append(",").group())
+        let doc = chain![
+            chain!["let", BoxDoc::line(), "x", BoxDoc::line(), "="].group(),
+            nest_on_line(chain![
+                "(",
+                chain![
+                    BoxDoc::line_(),
+                    chain!["x", ","].group(),
+                    BoxDoc::line(),
+                    chain!["1234567890", ","].group()
+                ]
                 .nest(2)
-                .append(BoxDoc::line_())
-                .append(")")
-        };
-
-        let from = BoxDoc::text("let")
-            .append(BoxDoc::line())
-            .append(BoxDoc::text("x"))
-            .append(BoxDoc::line())
-            .append(BoxDoc::text("="))
-            .group();
-
-        let single = from
-            .clone()
-            .append(BoxDoc::line())
-            .append(arg.clone())
-            .group()
-            .append(tuple(BoxDoc::line_()))
-            .group();
-
-        let hang = from
-            .clone()
-            .append(BoxDoc::line())
-            .append(arg.clone())
-            .group()
-            .append(tuple(BoxDoc::hardline()))
-            .group();
-
-        let break_all = from
-            .append(BoxDoc::line())
-            .append(arg.clone())
-            .append(tuple(BoxDoc::line()))
-            .group()
-            .nest(2);
-
-        let doc = BoxDoc::group(single.union(hang.union(break_all)));
+                .group(),
+                BoxDoc::line_().append(")"),
+            ])
+        ]
+        .group();
 
         test!(doc, "let x = (x, 1234567890,)");
         test!(8, doc, "let x =\n  (\n    x,\n    1234567890,\n  )");
+        test!(14, doc, "let x = (\n  x,\n  1234567890,\n)");
+    }
+
+    fn hang2(
+        from: BoxDoc<'static, ()>,
+        body_whitespace: BoxDoc<'static, ()>,
+        body: BoxDoc<'static, ()>,
+        trailer: BoxDoc<'static, ()>,
+    ) -> BoxDoc<'static, ()> {
+        let body1 = body_whitespace
+            .append(body.clone())
+            .nest(2)
+            .group()
+            .append(trailer.clone());
+        let body2 = BoxDoc::hardline()
+            .append(body.clone())
+            .nest(2)
+            .group()
+            .append(trailer.clone());
+
+        let single = from.clone().append(body1.clone()).group();
+
+        let hang = from.clone().append(body2).group();
+
+        let break_all = from.append(body1).group().nest(2);
+
+        BoxDoc::group(single.union(hang.union(break_all)))
+    }
+
+    #[test]
+    fn hang_lambda2() {
+        let from = chain![
+            chain!["let", BoxDoc::line(), "x", BoxDoc::line(), "="].group(),
+            BoxDoc::line(),
+            "\\y ->",
+        ]
+        .group();
+
+        let body = chain!["y"].group();
+
+        let trailer = BoxDoc::nil();
+
+        let doc = hang2(from, BoxDoc::line(), body, trailer);
+        eprintln!("{:#?}", doc);
+
+        test!(doc, "let x = \\y -> y");
+        test!(14, doc, "let x = \\y ->\n  y");
+    }
+
+    #[test]
+    fn union2() {
+        let from = chain![
+            chain!["let", BoxDoc::line(), "x", BoxDoc::line(), "="].group(),
+            BoxDoc::line(),
+            "(",
+        ]
+        .group();
+
+        let body = chain![
+            chain!["x", ","].group(),
+            BoxDoc::line(),
+            chain!["1234567890", ","].group()
+        ]
+        .group();
+
+        let trailer = BoxDoc::line_().append(")");
+
+        let doc = hang2(from, BoxDoc::line_(), body, trailer);
+
+        test!(doc, "let x = (x, 1234567890,)");
         test!(14, doc, "let x = (\n  x,\n  1234567890,\n)");
     }
 
@@ -1471,6 +1657,16 @@ mod tests {
         );
 
         test!(usize::max_value(), doc, "test test");
+    }
+
+    #[test]
+    fn fail() {
+        let fail_break: BoxDoc<()> = BoxDoc::fail().flat_alt(Doc::nil());
+
+        let doc = fail_break.append(Doc::text("12345")).group().union("abc");
+
+        test!(5, doc, "12345");
+        test!(4, doc, "abc");
     }
 
     pub struct TestWriter<W> {
@@ -1496,9 +1692,13 @@ mod tests {
         fn write_str_all(&mut self, s: &str) -> Result<(), W::Error> {
             self.upstream.write_str_all(s)
         }
+
+        fn fail_doc(&self) -> Self::Error {
+            self.upstream.fail_doc()
+        }
     }
 
-    impl<W> RenderAnnotated<()> for TestWriter<W>
+    impl<W> RenderAnnotated<'_, ()> for TestWriter<W>
     where
         W: Render,
     {

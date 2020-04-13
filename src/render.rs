@@ -19,6 +19,8 @@ pub trait Render {
         }
         Ok(())
     }
+
+    fn fail_doc(&self) -> Self::Error;
 }
 
 /// Writes to something implementing `std::io::Write`
@@ -44,6 +46,10 @@ where
 
     fn write_str_all(&mut self, s: &str) -> io::Result<()> {
         self.upstream.write_all(s.as_bytes())
+    }
+
+    fn fail_doc(&self) -> Self::Error {
+        io::Error::new(io::ErrorKind::Other, "Document failed to render")
     }
 }
 
@@ -71,15 +77,19 @@ where
     fn write_str_all(&mut self, s: &str) -> fmt::Result {
         self.upstream.write_str(s)
     }
+
+    fn fail_doc(&self) -> Self::Error {
+        fmt::Error
+    }
 }
 
 /// Trait representing the operations necessary to write an annotated document.
-pub trait RenderAnnotated<A>: Render {
-    fn push_annotation(&mut self, annotation: &A) -> Result<(), Self::Error>;
+pub trait RenderAnnotated<'a, A>: Render {
+    fn push_annotation(&mut self, annotation: &'a A) -> Result<(), Self::Error>;
     fn pop_annotation(&mut self) -> Result<(), Self::Error>;
 }
 
-impl<A, W> RenderAnnotated<A> for IoWrite<W>
+impl<A, W> RenderAnnotated<'_, A> for IoWrite<W>
 where
     W: io::Write,
 {
@@ -92,7 +102,7 @@ where
     }
 }
 
-impl<A, W> RenderAnnotated<A> for FmtWrite<W>
+impl<A, W> RenderAnnotated<'_, A> for FmtWrite<W>
 where
     W: fmt::Write,
 {
@@ -135,10 +145,14 @@ where
     fn write_str_all(&mut self, s: &str) -> io::Result<()> {
         self.upstream.write_all(s.as_bytes())
     }
+
+    fn fail_doc(&self) -> Self::Error {
+        io::Error::new(io::ErrorKind::Other, "Document failed to render")
+    }
 }
 
 #[cfg(feature = "termcolor")]
-impl<W> RenderAnnotated<ColorSpec> for TermColored<W>
+impl<W> RenderAnnotated<'_, ColorSpec> for TermColored<W>
 where
     W: WriteColor,
 {
@@ -156,255 +170,389 @@ where
     }
 }
 
-macro_rules! make_spaces {
-            () => { "" };
-            ($s: tt $($t: tt)*) => { concat!("          ", make_spaces!($($t)*)) };
+enum Annotation<'a, A> {
+    Push(&'a A),
+    Pop,
+}
+
+struct BufferWrite<'a, A> {
+    buffer: String,
+    annotations: Vec<(usize, Annotation<'a, A>)>,
+}
+
+impl<'a, A> BufferWrite<'a, A> {
+    fn new() -> Self {
+        BufferWrite {
+            buffer: String::new(),
+            annotations: Vec::new(),
         }
-
-pub(crate) const SPACES: &str = make_spaces!(,,,,,,,,,,);
-
-#[inline]
-pub fn best<'a, W, T, A>(doc: &Doc<'a, T, A>, width: usize, out: &mut W) -> Result<(), W::Error>
-where
-    T: DocPtr<'a, A> + 'a,
-    W: ?Sized + RenderAnnotated<A>,
-{
-    #[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
-    enum Mode {
-        Break,
-        Flat,
     }
 
-    type Cmd<'d, 'a, T, A> = (usize, Mode, &'d Doc<'a, T, A>);
-
-    fn write_newline<W>(ind: usize, out: &mut W) -> Result<(), W::Error>
+    fn render<W>(&mut self, render: &mut W) -> Result<(), W::Error>
     where
-        W: ?Sized + Render,
+        W: RenderAnnotated<'a, A>,
+        W: ?Sized,
     {
-        out.write_str_all("\n")?;
-        write_spaces(ind, out)
+        let mut start = 0;
+        for (end, annotation) in &self.annotations {
+            let s = &self.buffer[start..*end];
+            if !s.is_empty() {
+                render.write_str_all(s)?;
+            }
+            start = *end;
+            match annotation {
+                Annotation::Push(a) => render.push_annotation(a)?,
+                Annotation::Pop => render.pop_annotation()?,
+            }
+        }
+        let s = &self.buffer[start..];
+        if !s.is_empty() {
+            render.write_str_all(s)?;
+        }
+        Ok(())
+    }
+}
+
+impl<A> Render for BufferWrite<'_, A> {
+    type Error = ();
+
+    fn write_str(&mut self, s: &str) -> Result<usize, Self::Error> {
+        self.buffer.push_str(s);
+        Ok(s.len())
     }
 
-    fn write_spaces<W>(spaces: usize, out: &mut W) -> Result<(), W::Error>
-    where
-        W: ?Sized + Render,
-    {
-        let mut inserted = 0;
-        while inserted < spaces {
-            let insert = cmp::min(SPACES.len(), spaces - inserted);
-            inserted += out.write_str(&SPACES[..insert])?;
-        }
-
+    fn write_str_all(&mut self, s: &str) -> Result<(), Self::Error> {
+        self.buffer.push_str(s);
         Ok(())
     }
 
-    fn fitting<'a, 'd, T, A>(
-        temp_arena: &'d typed_arena::Arena<T>,
-        next: &'d Doc<'a, T, A>,
-        bcmds: &[Cmd<'d, 'a, T, A>],
-        fcmds: &mut Vec<&'d Doc<'a, T, A>>,
-        mut pos: usize,
-        width: usize,
-        ind: usize,
-        newline_fits: fn(Mode) -> bool,
-    ) -> bool
-    where
-        T: DocPtr<'a, A>,
-    {
-        let mut bidx = bcmds.len();
-        fcmds.clear(); // clear from previous calls from best
-        fcmds.push(next);
+    fn fail_doc(&self) -> Self::Error {}
+}
 
-        let mut mode = Mode::Flat;
-        loop {
-            let mut doc = match fcmds.pop() {
-                None => {
-                    if bidx == 0 {
-                        // All commands have been processed
-                        return true;
-                    } else {
-                        bidx -= 1;
-                        mode = Mode::Break;
-                        bcmds[bidx].2
-                    }
-                }
-                Some(cmd) => cmd,
-            };
-
-            loop {
-                match *doc {
-                    Doc::Nil => {}
-                    Doc::Append(ref ldoc, ref rdoc) => {
-                        fcmds.push(rdoc);
-                        // Since appended documents often appear in sequence on the left side we
-                        // gain a slight performance increase by batching these pushes (avoiding
-                        // to push and directly pop `Append` documents)
-                        doc = ldoc;
-                        while let Doc::Append(ref l, ref r) = *doc {
-                            fcmds.push(r);
-                            doc = l;
-                        }
-                        continue;
-                    }
-                    // Newlines inside the group makes it not fit, but those outside lets it
-                    // fit on the current line
-                    Doc::Line => return newline_fits(mode),
-                    Doc::BorrowedText(ref str) => {
-                        pos += str.len();
-                        if pos > width {
-                            return false;
-                        }
-                    }
-                    Doc::OwnedText(ref str) => {
-                        pos += str.len();
-                        if pos > width {
-                            return false;
-                        }
-                    }
-                    Doc::SmallText(ref str) => {
-                        pos += str.len();
-                        if pos > width {
-                            return false;
-                        }
-                    }
-                    Doc::FlatAlt(ref b, ref f) => {
-                        doc = match mode {
-                            Mode::Break => b,
-                            Mode::Flat => f,
-                        };
-                        continue;
-                    }
-
-                    Doc::Column(ref f) => {
-                        doc = temp_arena.alloc(f(pos));
-                        continue;
-                    }
-                    Doc::Nesting(ref f) => {
-                        doc = temp_arena.alloc(f(ind));
-                        continue;
-                    }
-                    Doc::Nest(_, ref next)
-                    | Doc::Group(ref next)
-                    | Doc::Annotated(_, ref next)
-                    | Doc::Union(_, ref next) => {
-                        doc = next;
-                        continue;
-                    }
-                }
-                break;
-            }
-        }
+impl<'a, A> RenderAnnotated<'a, A> for BufferWrite<'a, A> {
+    fn push_annotation(&mut self, a: &'a A) -> Result<(), Self::Error> {
+        self.annotations
+            .push((self.buffer.len(), Annotation::Push(a)));
+        Ok(())
     }
 
-    let temp_arena = typed_arena::Arena::new();
+    fn pop_annotation(&mut self) -> Result<(), Self::Error> {
+        self.annotations.push((self.buffer.len(), Annotation::Pop));
+        Ok(())
+    }
+}
 
-    let mut pos = 0;
-    let mut bcmds = vec![(0, Mode::Break, doc)];
-    let mut fcmds = vec![];
-    let mut annotation_levels = vec![];
+macro_rules! make_spaces {
+    () => { "" };
+    ($s: tt $($t: tt)*) => { concat!("          ", make_spaces!($($t)*)) };
+}
 
-    while let Some(mut cmd) = bcmds.pop() {
-        loop {
-            let (ind, mode, doc) = cmd;
-            match *doc {
-                Doc::Nil => {}
-                Doc::Append(ref ldoc, ref rdoc) => {
-                    bcmds.push((ind, mode, rdoc));
-                    let mut doc = ldoc;
-                    while let Doc::Append(ref l, ref r) = **doc {
-                        bcmds.push((ind, mode, r));
-                        doc = l;
-                    }
-                    cmd = (ind, mode, doc);
-                    continue;
-                }
-                Doc::FlatAlt(ref b, ref f) => {
-                    cmd = (
-                        ind,
-                        mode,
-                        match mode {
-                            Mode::Break => b,
-                            Mode::Flat => f,
-                        },
-                    );
-                    continue;
-                }
-                Doc::Group(ref doc) => match mode {
-                    Mode::Flat => {
-                        cmd = (ind, Mode::Flat, doc);
-                        continue;
-                    }
-                    Mode::Break => {
-                        cmd = if fitting(
-                            &temp_arena,
-                            doc,
-                            &bcmds,
-                            &mut fcmds,
-                            pos,
-                            width,
-                            ind,
-                            |mode| mode == Mode::Break,
-                        ) {
-                            (ind, Mode::Flat, &**doc)
-                        } else {
-                            (ind, Mode::Break, doc)
-                        };
-                        continue;
-                    }
-                },
-                Doc::Nest(off, ref doc) => {
-                    cmd = ((ind as isize).saturating_add(off) as usize, mode, doc);
-                    continue;
-                }
-                Doc::Line => {
-                    write_newline(ind, out)?;
-                    pos = ind;
-                }
-                Doc::OwnedText(ref s) => {
-                    out.write_str_all(s)?;
-                    pos += s.len();
-                }
-                Doc::BorrowedText(ref s) => {
-                    out.write_str_all(s)?;
-                    pos += s.len();
-                }
-                Doc::SmallText(ref s) => {
-                    out.write_str_all(s)?;
-                    pos += s.len();
-                }
-                Doc::Annotated(ref ann, ref doc) => {
-                    out.push_annotation(ann)?;
-                    annotation_levels.push(bcmds.len());
-                    cmd = (ind, mode, doc);
-                    continue;
-                }
-                Doc::Union(ref l, ref r) => {
-                    cmd = if fitting(&temp_arena, l, &bcmds, &mut fcmds, pos, width, ind, |_| {
-                        true
-                    }) {
-                        (ind, mode, l)
-                    } else {
-                        (ind, mode, r)
-                    };
-                    continue;
-                }
-                Doc::Column(ref f) => {
-                    cmd = (ind, mode, temp_arena.alloc(f(pos)));
-                    continue;
-                }
-                Doc::Nesting(ref f) => {
-                    cmd = (ind, mode, temp_arena.alloc(f(ind)));
-                    continue;
-                }
+pub(crate) const SPACES: &str = make_spaces!(,,,,,,,,,,);
+
+fn append_docs2<'a, 'd, T, A>(
+    ldoc: &'d Doc<'a, T, A>,
+    rdoc: &'d Doc<'a, T, A>,
+    mut consumer: impl FnMut(&'d Doc<'a, T, A>),
+) -> &'d Doc<'a, T, A>
+where
+    T: DocPtr<'a, A>,
+{
+    let d = append_docs(rdoc, &mut consumer);
+    consumer(d);
+    append_docs(ldoc, &mut consumer)
+}
+
+fn append_docs<'a, 'd, T, A>(
+    mut doc: &'d Doc<'a, T, A>,
+    consumer: &mut impl FnMut(&'d Doc<'a, T, A>),
+) -> &'d Doc<'a, T, A>
+where
+    T: DocPtr<'a, A>,
+{
+    loop {
+        // Since appended documents often appear in sequence on the left side we
+        // gain a slight performance increase by batching these pushes (avoiding
+        // to push and directly pop `Append` documents)
+        match doc {
+            Doc::Append(l, r) => {
+                let d = append_docs(r, consumer);
+                consumer(d);
+                doc = l;
             }
+            _ => return doc,
+        }
+    }
+}
 
-            break;
-        }
-        while annotation_levels.last() == Some(&bcmds.len()) {
-            annotation_levels.pop();
-            out.pop_annotation()?;
-        }
+pub fn best<'a, W, T, A>(doc: &Doc<'a, T, A>, width: usize, out: &mut W) -> Result<(), W::Error>
+where
+    T: DocPtr<'a, A> + 'a,
+    for<'b> W: RenderAnnotated<'b, A>,
+    W: ?Sized,
+{
+    let temp_arena = &typed_arena::Arena::new();
+    Best {
+        pos: 0,
+        bcmds: vec![(0, Mode::Break, doc)],
+        fcmds: vec![],
+        annotation_levels: vec![],
+        width,
+        temp_arena,
+    }
+    .best(0, out)?;
+
+    Ok(())
+}
+
+#[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
+enum Mode {
+    Break,
+    Flat,
+}
+
+type Cmd<'d, 'a, T, A> = (usize, Mode, &'d Doc<'a, T, A>);
+
+fn write_newline<W>(ind: usize, out: &mut W) -> Result<(), W::Error>
+where
+    W: ?Sized + Render,
+{
+    out.write_str_all("\n")?;
+    write_spaces(ind, out)
+}
+
+fn write_spaces<W>(spaces: usize, out: &mut W) -> Result<(), W::Error>
+where
+    W: ?Sized + Render,
+{
+    let mut inserted = 0;
+    while inserted < spaces {
+        let insert = cmp::min(SPACES.len(), spaces - inserted);
+        inserted += out.write_str(&SPACES[..insert])?;
     }
 
     Ok(())
+}
+
+fn fitting<'a, 'd, T, A>(
+    temp_arena: &'d typed_arena::Arena<T>,
+    next: &'d Doc<'a, T, A>,
+    bcmds: &[Cmd<'d, 'a, T, A>],
+    fcmds: &mut Vec<&'d Doc<'a, T, A>>,
+    mut pos: usize,
+    width: usize,
+    ind: usize,
+    newline_fits: fn(Mode) -> bool,
+) -> bool
+where
+    T: DocPtr<'a, A>,
+{
+    let mut bidx = bcmds.len();
+    fcmds.clear(); // clear from previous calls from best
+    fcmds.push(next);
+
+    let mut mode = Mode::Flat;
+    loop {
+        let mut doc = match fcmds.pop() {
+            None => {
+                if bidx == 0 {
+                    // All commands have been processed
+                    return true;
+                } else {
+                    bidx -= 1;
+                    mode = Mode::Break;
+                    bcmds[bidx].2
+                }
+            }
+            Some(cmd) => cmd,
+        };
+
+        loop {
+            match *doc {
+                Doc::Nil => {}
+                Doc::Append(ref ldoc, ref rdoc) => {
+                    doc = append_docs2(ldoc, rdoc, |doc| fcmds.push(doc));
+                    continue;
+                }
+                // Newlines inside the group makes it not fit, but those outside lets it
+                // fit on the current line
+                Doc::Line => return newline_fits(mode),
+                Doc::BorrowedText(ref str) => {
+                    pos += str.len();
+                    if pos > width {
+                        return false;
+                    }
+                }
+                Doc::OwnedText(ref str) => {
+                    pos += str.len();
+                    if pos > width {
+                        return false;
+                    }
+                }
+                Doc::SmallText(ref str) => {
+                    pos += str.len();
+                    if pos > width {
+                        return false;
+                    }
+                }
+                Doc::FlatAlt(ref b, ref f) => {
+                    doc = match mode {
+                        Mode::Break => b,
+                        Mode::Flat => f,
+                    };
+                    continue;
+                }
+
+                Doc::Column(ref f) => {
+                    doc = temp_arena.alloc(f(pos));
+                    continue;
+                }
+                Doc::Nesting(ref f) => {
+                    doc = temp_arena.alloc(f(ind));
+                    continue;
+                }
+                Doc::Nest(_, ref next)
+                | Doc::Group(ref next)
+                | Doc::Annotated(_, ref next)
+                | Doc::Union(_, ref next) => {
+                    doc = next;
+                    continue;
+                }
+                Doc::Fail => return false,
+            }
+            break;
+        }
+    }
+}
+
+struct Best<'d, 'a, T, A>
+where
+    T: DocPtr<'a, A> + 'a,
+{
+    pos: usize,
+    bcmds: Vec<Cmd<'d, 'a, T, A>>,
+    fcmds: Vec<&'d Doc<'a, T, A>>,
+    annotation_levels: Vec<usize>,
+    width: usize,
+    temp_arena: &'d typed_arena::Arena<T>,
+}
+
+impl<'d, 'a, T, A> Best<'d, 'a, T, A>
+where
+    T: DocPtr<'a, A> + 'a,
+{
+    fn best<W>(&mut self, top: usize, out: &mut W) -> Result<bool, W::Error>
+    where
+        W: RenderAnnotated<'d, A>,
+        W: ?Sized,
+    {
+        let mut fits = true;
+
+        while top < self.bcmds.len() {
+            let mut cmd = self.bcmds.pop().unwrap();
+            loop {
+                let (ind, mode, doc) = cmd;
+                match *doc {
+                    Doc::Nil => {}
+                    Doc::Append(ref ldoc, ref rdoc) => {
+                        cmd.2 = append_docs2(ldoc, rdoc, |doc| self.bcmds.push((ind, mode, doc)));
+                        continue;
+                    }
+                    Doc::FlatAlt(ref b, ref f) => {
+                        cmd.2 = match mode {
+                            Mode::Break => b,
+                            Mode::Flat => f,
+                        };
+                        continue;
+                    }
+                    Doc::Group(ref doc) => {
+                        match mode {
+                            Mode::Flat => (),
+                            Mode::Break => {
+                                if fitting(
+                                    &self.temp_arena,
+                                    doc,
+                                    &self.bcmds,
+                                    &mut self.fcmds,
+                                    self.pos,
+                                    self.width,
+                                    ind,
+                                    |mode| mode == Mode::Break,
+                                ) {
+                                    cmd.1 = Mode::Flat;
+                                }
+                            }
+                        }
+                        cmd.2 = doc;
+                        continue;
+                    }
+                    Doc::Nest(off, ref doc) => {
+                        cmd = ((ind as isize).saturating_add(off) as usize, mode, doc);
+                        continue;
+                    }
+                    Doc::Line => {
+                        write_newline(ind, out)?;
+                        self.pos = ind;
+                    }
+                    Doc::OwnedText(ref s) => {
+                        out.write_str_all(s)?;
+                        self.pos += s.len();
+                        fits &= self.pos <= self.width;
+                    }
+                    Doc::BorrowedText(ref s) => {
+                        out.write_str_all(s)?;
+                        self.pos += s.len();
+                        fits &= self.pos <= self.width;
+                    }
+                    Doc::SmallText(ref s) => {
+                        out.write_str_all(s)?;
+                        self.pos += s.len();
+                        fits &= self.pos <= self.width;
+                    }
+                    Doc::Annotated(ref ann, ref doc) => {
+                        out.push_annotation(ann)?;
+                        self.annotation_levels.push(self.bcmds.len());
+                        cmd.2 = doc;
+                        continue;
+                    }
+                    Doc::Union(ref l, ref r) => {
+                        let pos = self.pos;
+                        let annotation_levels = self.annotation_levels.len();
+                        let bcmds = self.bcmds.len();
+
+                        self.bcmds.push((ind, mode, l));
+
+                        let mut buffer = BufferWrite::new();
+
+                        match self.best(bcmds, &mut buffer) {
+                            Ok(true) => buffer.render(out)?,
+                            Ok(false) | Err(()) => {
+                                self.pos = pos;
+                                self.bcmds.truncate(bcmds);
+                                self.annotation_levels.truncate(annotation_levels);
+                                cmd.2 = r;
+                                continue;
+                            }
+                        }
+                    }
+                    Doc::Column(ref f) => {
+                        cmd.2 = self.temp_arena.alloc(f(self.pos));
+                        continue;
+                    }
+                    Doc::Nesting(ref f) => {
+                        cmd.2 = self.temp_arena.alloc(f(ind));
+                        continue;
+                    }
+                    Doc::Fail => return Err(out.fail_doc()),
+                }
+
+                break;
+            }
+            while self.annotation_levels.last() == Some(&self.bcmds.len()) {
+                self.annotation_levels.pop();
+                out.pop_annotation()?;
+            }
+        }
+
+        Ok(fits)
+    }
 }
