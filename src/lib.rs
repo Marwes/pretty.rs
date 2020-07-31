@@ -2,7 +2,7 @@
 //! [Wadler-style](http://homepages.inf.ed.ac.uk/wadler/papers/prettier/prettier.pdf)
 //! pretty-printing API.
 //!
-//! Start with with the static functions of [Doc](enum.Doc.html).
+//! Start with the static functions of [Doc](enum.Doc.html).
 //!
 //! ## Quick start
 //!
