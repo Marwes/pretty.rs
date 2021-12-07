@@ -141,6 +141,7 @@
 pub extern crate termcolor;
 
 use std::{borrow::Cow, convert::TryInto, fmt, io, ops::Deref, rc::Rc};
+
 #[cfg(feature = "termcolor")]
 use termcolor::{ColorSpec, WriteColor};
 
@@ -208,7 +209,14 @@ where
                 f.finish()
             }
             Doc::FlatAlt(ref x, ref y) => f.debug_tuple("FlatAlt").field(x).field(y).finish(),
-            Doc::Group(ref doc) => f.debug_tuple("Group").field(doc).finish(),
+            Doc::Group(ref doc) => {
+                if let Doc::FlatAlt(l, r) = &**doc {
+                    if let (Doc::Line, Doc::BorrowedText(" ")) = (&**l, &**r) {
+                        return f.debug_tuple("SoftLine").finish();
+                    }
+                }
+                f.debug_tuple("Group").field(doc).finish()
+            }
             Doc::Nest(off, ref doc) => f.debug_tuple("Nest").field(&off).field(doc).finish(),
             Doc::Line => f.debug_tuple("Line").finish(),
             Doc::OwnedText(ref s) => s.fmt(f),
