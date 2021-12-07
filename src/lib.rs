@@ -214,6 +214,9 @@ where
                     if let (Doc::Line, Doc::BorrowedText(" ")) = (&**l, &**r) {
                         return f.debug_tuple("SoftLine").finish();
                     }
+                    if let (Doc::Line, Doc::Nil) = (&**l, &**r) {
+                        return f.debug_tuple("SoftLine_").finish();
+                    }
                 }
                 f.debug_tuple("Group").field(doc).finish()
             }
@@ -926,14 +929,73 @@ where
     }
 }
 
-impl<'a, T, A, S> From<S> for BuildDoc<'a, T, A>
+impl<'a, T, A> From<String> for BuildDoc<'a, T, A>
 where
     T: DocPtr<'a, A>,
-    S: Into<Cow<'a, str>>,
 {
-    fn from(s: S) -> Self {
+    fn from(s: String) -> Self {
         BuildDoc::Doc(Doc::text(s))
     }
+}
+
+impl<'a, T, A> From<&'a str> for BuildDoc<'a, T, A>
+where
+    T: DocPtr<'a, A>,
+{
+    fn from(s: &'a str) -> Self {
+        BuildDoc::Doc(Doc::text(s))
+    }
+}
+
+impl<'a, T, A> From<&'a String> for BuildDoc<'a, T, A>
+where
+    T: DocPtr<'a, A>,
+{
+    fn from(s: &'a String) -> Self {
+        BuildDoc::Doc(Doc::text(s))
+    }
+}
+
+impl<'a, T, A, S> From<Option<S>> for BuildDoc<'a, T, A>
+where
+    T: DocPtr<'a, A>,
+    S: Into<BuildDoc<'a, T, A>>,
+{
+    fn from(s: Option<S>) -> Self {
+        match s {
+            Some(s) => s.into(),
+            None => BuildDoc::Doc(Doc::Nil),
+        }
+    }
+}
+
+/// Concatenates a number of documents (or values that can be converted into a document, like
+/// `&str`)
+///
+/// ```
+/// use pretty::{docs, Arena, DocAllocator};
+/// let arena = &Arena::<()>::new();
+/// let doc = docs![
+///     arena,
+///     "let",
+///     arena.softline(),
+///     "x",
+///     arena.softline(),
+///     "=",
+///     arena.softline(),
+///     Some("123"),
+/// ];
+/// assert_eq!(doc.1.pretty(80).to_string(), "let x = 123");
+/// ```
+#[macro_export]
+macro_rules! docs {
+    ($alloc: expr, $first: expr, $($rest: expr),+ $(,)?) => {{
+        let mut doc = $crate::DocBuilder($alloc, $first.into());
+        $(
+            doc = doc.append($rest);
+        )*
+        doc
+    }}
 }
 
 impl<'a, 's, D, A> DocBuilder<'a, D, A>
