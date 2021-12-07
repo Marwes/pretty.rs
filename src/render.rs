@@ -1,6 +1,5 @@
-use std::cmp;
-use std::fmt;
-use std::io;
+use std::{cmp, fmt, io};
+
 #[cfg(feature = "termcolor")]
 use termcolor::{ColorSpec, WriteColor};
 
@@ -286,7 +285,7 @@ where
 
 pub fn best<'a, W, T, A>(doc: &Doc<'a, T, A>, width: usize, out: &mut W) -> Result<(), W::Error>
 where
-    T: DocPtr<'a, A> + 'a,
+    T: DocPtr<'a, A> + std::fmt::Debug + 'a,
     for<'b> W: RenderAnnotated<'b, A>,
     W: ?Sized,
 {
@@ -438,7 +437,7 @@ where
 
 impl<'d, 'a, T, A> Best<'d, 'a, T, A>
 where
-    T: DocPtr<'a, A> + 'a,
+    T: DocPtr<'a, A> + std::fmt::Debug + 'a,
 {
     fn best<W>(&mut self, top: usize, out: &mut W) -> Result<bool, W::Error>
     where
@@ -468,7 +467,7 @@ where
                         match mode {
                             Mode::Flat => (),
                             Mode::Break => {
-                                if fitting(
+                                let fits = fitting(
                                     &self.temp_arena,
                                     doc,
                                     &self.bcmds,
@@ -477,7 +476,15 @@ where
                                     self.width,
                                     ind,
                                     |mode| mode == Mode::Break,
-                                ) {
+                                );
+                                log::trace!(
+                                    "Fits {} {} {}: {:#?}",
+                                    fits,
+                                    self.pos,
+                                    self.width,
+                                    doc
+                                );
+                                if fits {
                                     cmd.1 = Mode::Flat;
                                 }
                             }

@@ -567,7 +567,7 @@ where
 
 impl<'a, T, A> fmt::Display for Pretty<'a, '_, T, A>
 where
-    T: DocPtr<'a, A>,
+    T: DocPtr<'a, A> + std::fmt::Debug,
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         self.doc.render_fmt(self.width, f)
@@ -576,7 +576,7 @@ where
 
 impl<'a, T, A> Doc<'a, T, A>
 where
-    T: DocPtr<'a, A> + 'a,
+    T: DocPtr<'a, A> + std::fmt::Debug + 'a,
 {
     /// Writes a rendered document to a `std::io::Write` object.
     #[inline]
@@ -624,7 +624,7 @@ where
 #[cfg(feature = "termcolor")]
 impl<'a, T> Doc<'a, T, ColorSpec>
 where
-    T: DocPtr<'a, ColorSpec> + 'a,
+    T: DocPtr<'a, ColorSpec> + std::fmt::Debug + 'a,
 {
     #[inline]
     pub fn render_colored<W>(&self, width: usize, out: W) -> io::Result<()>
@@ -1545,6 +1545,24 @@ mod tests {
         );
 
         test!(5, doc, "{\n  test\n  test\n}");
+    }
+
+    #[test]
+    fn block_with_hardline() {
+        let doc: RcDoc<()> = RcDoc::group(
+            RcDoc::text("{")
+                .append(
+                    RcDoc::line()
+                        .append(RcDoc::text("test"))
+                        .append(RcDoc::hardline())
+                        .append(RcDoc::text("test"))
+                        .nest(2),
+                )
+                .append(RcDoc::line())
+                .append(RcDoc::text("}")),
+        );
+
+        test!(10, doc, "{\n  test\n  test\n}");
     }
 
     #[test]

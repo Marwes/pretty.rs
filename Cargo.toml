@@ -14,6 +14,7 @@ edition = "2018"
 features = ["termcolor"]
 
 [dependencies]
+log = "0.4"
 arrayvec = "0.5"
 typed-arena = "2.0.0"
 termcolor = { version = "1.1.0", optional = true }
