@@ -332,97 +332,6 @@ where
     Ok(())
 }
 
-fn fitting<'a, 'd, T, A>(
-    temp_arena: &'d typed_arena::Arena<T>,
-    next: &'d Doc<'a, T, A>,
-    bcmds: &[Cmd<'d, 'a, T, A>],
-    fcmds: &mut Vec<&'d Doc<'a, T, A>>,
-    mut pos: usize,
-    width: usize,
-    ind: usize,
-    newline_fits: fn(Mode) -> bool,
-) -> bool
-where
-    T: DocPtr<'a, A>,
-{
-    let mut bidx = bcmds.len();
-    fcmds.clear(); // clear from previous calls from best
-    fcmds.push(next);
-
-    let mut mode = Mode::Flat;
-    loop {
-        let mut doc = match fcmds.pop() {
-            None => {
-                if bidx == 0 {
-                    // All commands have been processed
-                    return true;
-                } else {
-                    bidx -= 1;
-                    mode = Mode::Break;
-                    bcmds[bidx].2
-                }
-            }
-            Some(cmd) => cmd,
-        };
-
-        loop {
-            match *doc {
-                Doc::Nil => {}
-                Doc::Append(ref ldoc, ref rdoc) => {
-                    doc = append_docs2(ldoc, rdoc, |doc| fcmds.push(doc));
-                    continue;
-                }
-                // Newlines inside the group makes it not fit, but those outside lets it
-                // fit on the current line
-                Doc::Line => return newline_fits(mode),
-                Doc::BorrowedText(ref str) => {
-                    pos += str.len();
-                    if pos > width {
-                        return false;
-                    }
-                }
-                Doc::OwnedText(ref str) => {
-                    pos += str.len();
-                    if pos > width {
-                        return false;
-                    }
-                }
-                Doc::SmallText(ref str) => {
-                    pos += str.len();
-                    if pos > width {
-                        return false;
-                    }
-                }
-                Doc::FlatAlt(ref b, ref f) => {
-                    doc = match mode {
-                        Mode::Break => b,
-                        Mode::Flat => f,
-                    };
-                    continue;
-                }
-
-                Doc::Column(ref f) => {
-                    doc = temp_arena.alloc(f(pos));
-                    continue;
-                }
-                Doc::Nesting(ref f) => {
-                    doc = temp_arena.alloc(f(ind));
-                    continue;
-                }
-                Doc::Nest(_, ref next)
-                | Doc::Group(ref next)
-                | Doc::Annotated(_, ref next)
-                | Doc::Union(_, ref next) => {
-                    doc = next;
-                    continue;
-                }
-                Doc::Fail => return false,
-            }
-            break;
-        }
-    }
-}
-
 struct Best<'d, 'a, T, A>
 where
     T: DocPtr<'a, A> + 'a,
@@ -439,6 +348,88 @@ impl<'d, 'a, T, A> Best<'d, 'a, T, A>
 where
     T: DocPtr<'a, A> + std::fmt::Debug + 'a,
 {
+    fn fitting(&mut self, next: &'d Doc<'a, T, A>, mut pos: usize, ind: usize) -> bool
+    where
+        T: DocPtr<'a, A>,
+    {
+        let mut bidx = self.bcmds.len();
+        self.fcmds.clear(); // clear from previous calls from best
+        self.fcmds.push(next);
+
+        let mut mode = Mode::Flat;
+        loop {
+            let mut doc = match self.fcmds.pop() {
+                None => {
+                    if bidx == 0 {
+                        // All commands have been processed
+                        return true;
+                    } else {
+                        bidx -= 1;
+                        mode = Mode::Break;
+                        self.bcmds[bidx].2
+                    }
+                }
+                Some(cmd) => cmd,
+            };
+
+            loop {
+                match *doc {
+                    Doc::Nil => {}
+                    Doc::Append(ref ldoc, ref rdoc) => {
+                        doc = append_docs2(ldoc, rdoc, |doc| self.fcmds.push(doc));
+                        continue;
+                    }
+                    // Newlines inside the group makes it not fit, but those outside lets it
+                    // fit on the current line
+                    Doc::Line => return mode == Mode::Break,
+                    Doc::BorrowedText(ref str) => {
+                        pos += str.len();
+                        if pos > self.width {
+                            return false;
+                        }
+                    }
+                    Doc::OwnedText(ref str) => {
+                        pos += str.len();
+                        if pos > self.width {
+                            return false;
+                        }
+                    }
+                    Doc::SmallText(ref str) => {
+                        pos += str.len();
+                        if pos > self.width {
+                            return false;
+                        }
+                    }
+                    Doc::FlatAlt(ref b, ref f) => {
+                        doc = match mode {
+                            Mode::Break => b,
+                            Mode::Flat => f,
+                        };
+                        continue;
+                    }
+
+                    Doc::Column(ref f) => {
+                        doc = self.temp_arena.alloc(f(pos));
+                        continue;
+                    }
+                    Doc::Nesting(ref f) => {
+                        doc = self.temp_arena.alloc(f(ind));
+                        continue;
+                    }
+                    Doc::Nest(_, ref next)
+                    | Doc::Group(ref next)
+                    | Doc::Annotated(_, ref next)
+                    | Doc::Union(_, ref next) => {
+                        doc = next;
+                        continue;
+                    }
+                    Doc::Fail => return false,
+                }
+                break;
+            }
+        }
+    }
+
     fn best<W>(&mut self, top: usize, out: &mut W) -> Result<bool, W::Error>
     where
         W: RenderAnnotated<'d, A>,
@@ -467,19 +458,11 @@ where
                         match mode {
                             Mode::Flat => (),
                             Mode::Break => {
-                                let fits = fitting(
-                                    &self.temp_arena,
-                                    doc,
-                                    &self.bcmds,
-                                    &mut self.fcmds,
-                                    self.pos,
-                                    self.width,
-                                    ind,
-                                    |mode| mode == Mode::Break,
-                                );
+                                let fits = self.fitting(doc, self.pos, ind);
                                 log::trace!(
-                                    "Fits {} {} {}: {:#?}",
+                                    "Fits {} {:?} {} {}: {:#?}",
                                     fits,
+                                    mode,
                                     self.pos,
                                     self.width,
                                     doc
