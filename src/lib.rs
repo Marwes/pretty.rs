@@ -567,7 +567,8 @@ where
 
 impl<'a, T, A> fmt::Display for Pretty<'a, '_, T, A>
 where
-    T: DocPtr<'a, A> + std::fmt::Debug,
+    T: DocPtr<'a, A>,
+    Doc<'a, T, A>: std::fmt::Debug,
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         self.doc.render_fmt(self.width, f)
@@ -576,7 +577,8 @@ where
 
 impl<'a, T, A> Doc<'a, T, A>
 where
-    T: DocPtr<'a, A> + std::fmt::Debug + 'a,
+    T: DocPtr<'a, A> + 'a,
+    Doc<'a, T, A>: std::fmt::Debug,
 {
     /// Writes a rendered document to a `std::io::Write` object.
     #[inline]
