@@ -383,7 +383,7 @@ where
                     }
                     // Newlines inside the group makes it not fit, but those outside lets it
                     // fit on the current line
-                    Doc::Line => return mode == Mode::Break,
+                    Doc::Hardline => return mode == Mode::Break,
                     Doc::BorrowedText(ref str) => {
                         pos += str.len();
                         if pos > self.width {
@@ -462,9 +462,8 @@ where
                             Mode::Break => {
                                 let fits = self.fitting(doc, self.pos, ind);
                                 log::trace!(
-                                    "Fits {} {:?} {} {}: {:#?} {:#?}",
+                                    "Fits {} {} {}: {:#?} {:#?}",
                                     fits,
-                                    mode,
                                     self.pos,
                                     self.width,
                                     **doc,
@@ -482,7 +481,7 @@ where
                         cmd = ((ind as isize).saturating_add(off) as usize, mode, doc);
                         continue;
                     }
-                    Doc::Line => {
+                    Doc::Hardline => {
                         write_newline(ind, out)?;
                         self.pos = ind;
                     }

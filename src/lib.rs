@@ -163,7 +163,7 @@ pub enum Doc<'a, T: DocPtr<'a, A>, A = ()> {
     Group(T),
     FlatAlt(T, T),
     Nest(isize, T),
-    Line,
+    Hardline,
     OwnedText(Box<str>),
     BorrowedText(&'a str),
     SmallText(SmallText),
@@ -211,17 +211,17 @@ where
             Doc::FlatAlt(ref x, ref y) => f.debug_tuple("FlatAlt").field(x).field(y).finish(),
             Doc::Group(ref doc) => {
                 if let Doc::FlatAlt(l, r) = &**doc {
-                    if let (Doc::Line, Doc::BorrowedText(" ")) = (&**l, &**r) {
+                    if let (Doc::Hardline, Doc::BorrowedText(" ")) = (&**l, &**r) {
                         return f.debug_tuple("SoftLine").finish();
                     }
-                    if let (Doc::Line, Doc::Nil) = (&**l, &**r) {
+                    if let (Doc::Hardline, Doc::Nil) = (&**l, &**r) {
                         return f.debug_tuple("SoftLine_").finish();
                     }
                 }
                 f.debug_tuple("Group").field(doc).finish()
             }
             Doc::Nest(off, ref doc) => f.debug_tuple("Nest").field(&off).field(doc).finish(),
-            Doc::Line => f.debug_tuple("Line").finish(),
+            Doc::Hardline => f.debug_tuple("Line").finish(),
             Doc::OwnedText(ref s) => s.fmt(f),
             Doc::BorrowedText(ref s) => s.fmt(f),
             Doc::SmallText(ref s) => s.fmt(f),
@@ -461,7 +461,7 @@ macro_rules! impl_doc_methods {
             /// A single hardline.
             #[inline]
             pub fn hardline() -> Self {
-                Doc::Line.into()
+                Doc::Hardline.into()
             }
 
             /// The given text, which must not contain line breaks.
@@ -719,7 +719,7 @@ where
     /// Allocate a single hardline.
     #[inline]
     fn hardline(&'a self) -> DocBuilder<'a, Self, A> {
-        DocBuilder(self, Doc::Line.into())
+        DocBuilder(self, Doc::Hardline.into())
     }
 
     #[inline]
@@ -1393,26 +1393,30 @@ impl<'a, A> DocAllocator<'a, A> for Arena<'a, A> {
         RefDoc(match doc {
             // Return 'static references for common variants to avoid some allocations
             Doc::Nil => &Doc::Nil,
-            Doc::Line => &Doc::Line,
+            Doc::Hardline => &Doc::Hardline,
             Doc::Fail => &Doc::Fail,
             // line()
-            Doc::FlatAlt(RefDoc(Doc::Line), RefDoc(Doc::BorrowedText(" "))) => {
-                &Doc::FlatAlt(RefDoc(&Doc::Line), RefDoc(&Doc::BorrowedText(" ")))
+            Doc::FlatAlt(RefDoc(Doc::Hardline), RefDoc(Doc::BorrowedText(" "))) => {
+                &Doc::FlatAlt(RefDoc(&Doc::Hardline), RefDoc(&Doc::BorrowedText(" ")))
             }
             // line_()
-            Doc::FlatAlt(RefDoc(Doc::Line), RefDoc(Doc::Nil)) => {
-                &Doc::FlatAlt(RefDoc(&Doc::Line), RefDoc(&Doc::Nil))
+            Doc::FlatAlt(RefDoc(Doc::Hardline), RefDoc(Doc::Nil)) => {
+                &Doc::FlatAlt(RefDoc(&Doc::Hardline), RefDoc(&Doc::Nil))
             }
             // softline()
-            Doc::Group(RefDoc(Doc::FlatAlt(RefDoc(Doc::Line), RefDoc(Doc::BorrowedText(" "))))) => {
-                &Doc::Group(RefDoc(&Doc::FlatAlt(
-                    RefDoc(&Doc::Line),
-                    RefDoc(&Doc::BorrowedText(" ")),
-                )))
-            }
+            Doc::Group(RefDoc(Doc::FlatAlt(
+                RefDoc(Doc::Hardline),
+                RefDoc(Doc::BorrowedText(" ")),
+            ))) => &Doc::Group(RefDoc(&Doc::FlatAlt(
+                RefDoc(&Doc::Hardline),
+                RefDoc(&Doc::BorrowedText(" ")),
+            ))),
             // softline_()
-            Doc::Group(RefDoc(Doc::FlatAlt(RefDoc(Doc::Line), RefDoc(Doc::Nil)))) => {
-                &Doc::Group(RefDoc(&Doc::FlatAlt(RefDoc(&Doc::Line), RefDoc(&Doc::Nil))))
+            Doc::Group(RefDoc(Doc::FlatAlt(RefDoc(Doc::Hardline), RefDoc(Doc::Nil)))) => {
+                &Doc::Group(RefDoc(&Doc::FlatAlt(
+                    RefDoc(&Doc::Hardline),
+                    RefDoc(&Doc::Nil),
+                )))
             }
             _ => self.docs.alloc(doc),
         })
