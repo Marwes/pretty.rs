@@ -1066,7 +1066,11 @@ where
     #[inline]
     pub fn group(self) -> DocBuilder<'a, D, A> {
         match *self.1 {
-            Doc::Group(_) | Doc::Nil => self,
+            Doc::Group(_)
+            | Doc::OwnedText(_)
+            | Doc::BorrowedText(_)
+            | Doc::SmallText(_)
+            | Doc::Nil => self,
             _ => {
                 let DocBuilder(allocator, this) = self;
                 DocBuilder(allocator, Doc::Group(allocator.alloc_cow(this)).into())
