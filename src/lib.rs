@@ -199,6 +199,18 @@ where
     A: fmt::Debug,
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let is_line = |doc: &Doc<'a, T, A>| match doc {
+            Doc::FlatAlt(x, y) => {
+                matches!((&**x, &**y), (Doc::Hardline, Doc::BorrowedText(" ")))
+            }
+            _ => false,
+        };
+        let is_line_ = |doc: &Doc<'a, T, A>| match doc {
+            Doc::FlatAlt(x, y) => {
+                matches!((&**x, &**y), (Doc::Hardline, Doc::Nil))
+            }
+            _ => false,
+        };
         match self {
             Doc::Nil => f.debug_tuple("Nil").finish(),
             Doc::Append(..) => {
@@ -208,20 +220,20 @@ where
                 });
                 f.finish()
             }
+            _ if is_line(self) => f.debug_tuple("Line").finish(),
+            _ if is_line_(self) => f.debug_tuple("Line_").finish(),
             Doc::FlatAlt(ref x, ref y) => f.debug_tuple("FlatAlt").field(x).field(y).finish(),
             Doc::Group(ref doc) => {
-                if let Doc::FlatAlt(l, r) = &**doc {
-                    if let (Doc::Hardline, Doc::BorrowedText(" ")) = (&**l, &**r) {
-                        return f.debug_tuple("SoftLine").finish();
-                    }
-                    if let (Doc::Hardline, Doc::Nil) = (&**l, &**r) {
-                        return f.debug_tuple("SoftLine_").finish();
-                    }
+                if is_line(self) {
+                    return f.debug_tuple("SoftLine").finish();
+                }
+                if is_line_(self) {
+                    return f.debug_tuple("SoftLine_").finish();
                 }
                 f.debug_tuple("Group").field(doc).finish()
             }
             Doc::Nest(off, ref doc) => f.debug_tuple("Nest").field(&off).field(doc).finish(),
-            Doc::Hardline => f.debug_tuple("Line").finish(),
+            Doc::Hardline => f.debug_tuple("Hardline").finish(),
             Doc::OwnedText(ref s) => s.fmt(f),
             Doc::BorrowedText(ref s) => s.fmt(f),
             Doc::SmallText(ref s) => s.fmt(f),
@@ -991,7 +1003,7 @@ where
 /// ```
 #[macro_export]
 macro_rules! docs {
-    ($alloc: expr, $first: expr, $($rest: expr),+ $(,)?) => {{
+    ($alloc: expr, $first: expr $(, $rest: expr)* $(,)?) => {{
         let mut doc = $crate::DocBuilder($alloc, $first.into());
         $(
             doc = doc.append($rest);
