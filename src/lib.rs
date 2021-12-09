@@ -479,9 +479,14 @@ macro_rules! impl_doc_methods {
             /// The given text, which must not contain line breaks.
             #[inline]
             pub fn text<U: Into<Cow<'a, str>>>(data: U) -> Self {
-                match data.into() {
-                    Cow::Owned(t) => Doc::OwnedText(t.into()).into(),
-                    Cow::Borrowed(t) => Doc::BorrowedText(t).into(),
+                let data: Cow<_> = data.into();
+                if data.is_empty() {
+                    Doc::Nil.into()
+                } else {
+                    match data {
+                        Cow::Owned(t) => Doc::OwnedText(t.into()).into(),
+                        Cow::Borrowed(t) => Doc::BorrowedText(t).into(),
+                    }
                 }
             }
 
@@ -1623,6 +1628,7 @@ mod tests {
         BoxDoc::softline().append(BoxDoc::nesting(move |n| {
             let doc = doc.clone();
             BoxDoc::column(move |c| {
+                log::trace!("{} == {}", n, c);
                 if n == c {
                     BoxDoc::text("  ").append(doc.clone()).nest(2)
                 } else {
@@ -1633,7 +1639,9 @@ mod tests {
     }
 
     #[test]
-    fn hang_lambda() {
+    fn hang_lambda1() {
+        let _ = env_logger::try_init();
+
         let doc = chain![
             chain!["let", BoxDoc::line(), "x", BoxDoc::line(), "="].group(),
             nest_on_line(chain![
@@ -1644,8 +1652,19 @@ mod tests {
         .group();
 
         test!(doc, "let x = \\y -> y");
-        test!(8, doc, "let x =\n  \\y ->\n    y");
-        test!(14, doc, "let x = \\y ->\n  y");
+        test!(
+            8,
+            doc,
+            r"let x =
+  \y ->
+    y"
+        );
+        test!(
+            14,
+            doc,
+            r"let x = \y ->
+  y"
+        );
     }
 
     #[test]
