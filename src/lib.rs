@@ -660,6 +660,17 @@ pub struct DocBuilder<'a, D, A = ()>(pub &'a D, pub BuildDoc<'a, D::Doc, A>)
 where
     D: ?Sized + DocAllocator<'a, A>;
 
+impl<'a, D, A> fmt::Debug for DocBuilder<'a, D, A>
+where
+    D: ?Sized + DocAllocator<'a, A>,
+    D::Doc: fmt::Debug,
+    A: fmt::Debug,
+{
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.1.fmt(f)
+    }
+}
+
 impl<'a, A, D> Clone for DocBuilder<'a, D, A>
 where
     A: Clone,
