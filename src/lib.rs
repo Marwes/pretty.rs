@@ -823,6 +823,16 @@ where
     }
 }
 
+impl<'a, D, A> Pretty<'a, D, A> for &'a String
+where
+    A: 'a,
+    D: ?Sized + DocAllocator<'a, A>,
+{
+    fn pretty(self, allocator: &'a D) -> DocBuilder<'a, D, A> {
+        self[..].pretty(allocator)
+    }
+}
+
 impl<'a, D, A> Pretty<'a, D, A> for String
 where
     A: 'a,
