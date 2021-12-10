@@ -1,3 +1,13 @@
+<a name="v0.11.1"></a>
+### v0.11.1 (2021-12-10)
+
+
+#### Bug Fixes
+
+*   Allow &String in the docs! macro again ([e02bdc8f](https://github.com/Marwes/pretty.rs/commit/e02bdc8f24f251a496529fc79fcb243da816ddee))
+
+
+
 <a name="v0.11.0"></a>
 ## v0.11.0 (2021-12-10)
 
