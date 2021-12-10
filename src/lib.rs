@@ -164,6 +164,8 @@ pub enum Doc<'a, T: DocPtr<'a, A>, A = ()> {
     FlatAlt(T, T),
     Nest(isize, T),
     Hardline,
+    // Stores the length of a string document that is not just ascii
+    RenderLen(usize, T),
     OwnedText(Box<str>),
     BorrowedText(&'a str),
     SmallText(SmallText),
@@ -234,6 +236,7 @@ where
             }
             Doc::Nest(off, ref doc) => f.debug_tuple("Nest").field(&off).field(doc).finish(),
             Doc::Hardline => f.debug_tuple("Hardline").finish(),
+            Doc::RenderLen(_, d) => d.fmt(f),
             Doc::OwnedText(ref s) => s.fmt(f),
             Doc::BorrowedText(ref s) => s.fmt(f),
             Doc::SmallText(ref s) => s.fmt(f),
@@ -319,6 +322,20 @@ macro_rules! impl_doc {
         impl_doc_methods!($name ('a, A) where () where ());
 
         impl<'a, A> $name<'a, A> {
+            /// The text `t.to_string()`.
+            ///
+            /// The given text must not contain line breaks.
+            #[inline]
+            pub fn as_string<U: fmt::Display>(data: U) -> Self {
+                $allocator.as_string(data).into_doc()
+            }
+
+            /// The given text, which must not contain line breaks.
+            #[inline]
+            pub fn text<U: Into<Cow<'a, str>>>(data: U) -> Self {
+                $allocator.text(data).into_doc()
+            }
+
             /// Append the given document after this document.
             #[inline]
             pub fn append<D>(self, that: D) -> Self
@@ -456,38 +473,10 @@ macro_rules! impl_doc_methods {
                 Doc::Nil.into()
             }
 
-            /// The text `t.to_string()`.
-            ///
-            /// The given text must not contain line breaks.
-            #[inline]
-            pub fn as_string<U: fmt::Display>(data: U) -> Self {
-                use std::fmt::Write;
-                let mut buf = FmtText::Small(SmallText::new());
-                write!(buf, "{}", data).unwrap();
-                (match buf {
-                    FmtText::Small(b) => Doc::SmallText(b),
-                    FmtText::Large(b) => Doc::OwnedText(b.into()),
-                }).into()
-            }
-
             /// A single hardline.
             #[inline]
             pub fn hardline() -> Self {
                 Doc::Hardline.into()
-            }
-
-            /// The given text, which must not contain line breaks.
-            #[inline]
-            pub fn text<U: Into<Cow<'a, str>>>(data: U) -> Self {
-                let data: Cow<_> = data.into();
-                if data.is_empty() {
-                    Doc::Nil.into()
-                } else {
-                    match data {
-                        Cow::Owned(t) => Doc::OwnedText(t.into()).into(),
-                        Cow::Borrowed(t) => Doc::BorrowedText(t).into(),
-                    }
-                }
             }
 
             #[inline]
@@ -533,6 +522,20 @@ impl<'a, T, A> BuildDoc<'a, T, A>
 where
     T: StaticDoc<'a, A>,
 {
+    /// The text `t.to_string()`.
+    ///
+    /// The given text must not contain line breaks.
+    #[inline]
+    pub fn as_string<U: fmt::Display>(data: U) -> Self {
+        T::ALLOCATOR.as_string(data).1
+    }
+
+    /// The given text, which must not contain line breaks.
+    #[inline]
+    pub fn text<U: Into<Cow<'a, str>>>(data: U) -> Self {
+        T::ALLOCATOR.text(data).1
+    }
+
     fn flat_alt<D>(self, doc: D) -> Self
     where
         D: Pretty<'a, T::Allocator, A>,
@@ -545,6 +548,20 @@ impl<'a, T, A> Doc<'a, T, A>
 where
     T: StaticDoc<'a, A>,
 {
+    /// The text `t.to_string()`.
+    ///
+    /// The given text must not contain line breaks.
+    #[inline]
+    pub fn as_string<U: fmt::Display>(data: U) -> Self {
+        T::ALLOCATOR.as_string(data).into_plain_doc()
+    }
+
+    /// The given text, which must not contain line breaks.
+    #[inline]
+    pub fn text<U: Into<Cow<'a, str>>>(data: U) -> Self {
+        T::ALLOCATOR.text(data).into_plain_doc()
+    }
+
     fn flat_alt<D>(self, doc: D) -> Self
     where
         D: Pretty<'a, T::Allocator, A>,
@@ -565,7 +582,7 @@ where
 
 impl<'a, T, A, S> From<S> for Doc<'a, T, A>
 where
-    T: DocPtr<'a, A>,
+    T: StaticDoc<'a, A>,
     S: Into<Cow<'a, str>>,
 {
     fn from(s: S) -> Doc<'a, T, A> {
@@ -915,7 +932,14 @@ where
     /// The given text must not contain line breaks.
     #[inline]
     fn as_string<U: fmt::Display>(&'a self, data: U) -> DocBuilder<'a, Self, A> {
-        DocBuilder(self, Doc::as_string(data.to_string()).into())
+        use std::fmt::Write;
+        let mut buf = FmtText::Small(SmallText::new());
+        write!(buf, "{}", data).unwrap();
+        let doc = match buf {
+            FmtText::Small(b) => Doc::SmallText(b),
+            FmtText::Large(b) => Doc::OwnedText(b.into()),
+        };
+        DocBuilder(self, doc.into()).with_utf8_len()
     }
 
     /// Allocate a document containing the given text.
@@ -923,7 +947,16 @@ where
     /// The given text must not contain line breaks.
     #[inline]
     fn text<U: Into<Cow<'a, str>>>(&'a self, data: U) -> DocBuilder<'a, Self, A> {
-        DocBuilder(self, Doc::text(data).into())
+        let data: Cow<_> = data.into();
+        let doc = if data.is_empty() {
+            Doc::Nil.into()
+        } else {
+            match data {
+                Cow::Owned(t) => Doc::OwnedText(t.into()).into(),
+                Cow::Borrowed(t) => Doc::BorrowedText(t).into(),
+            }
+        };
+        DocBuilder(self, doc).with_utf8_len()
     }
 
     /// Allocate a document concatenating the given documents.
@@ -1073,7 +1106,7 @@ where
 
 impl<'a, T, A> From<String> for BuildDoc<'a, T, A>
 where
-    T: DocPtr<'a, A>,
+    T: StaticDoc<'a, A>,
 {
     fn from(s: String) -> Self {
         BuildDoc::Doc(Doc::text(s))
@@ -1082,7 +1115,7 @@ where
 
 impl<'a, T, A> From<&'a str> for BuildDoc<'a, T, A>
 where
-    T: DocPtr<'a, A>,
+    T: StaticDoc<'a, A>,
 {
     fn from(s: &'a str) -> Self {
         BuildDoc::Doc(Doc::text(s))
@@ -1091,7 +1124,7 @@ where
 
 impl<'a, T, A> From<&'a String> for BuildDoc<'a, T, A>
 where
-    T: DocPtr<'a, A>,
+    T: StaticDoc<'a, A>,
 {
     fn from(s: &'a String) -> Self {
         BuildDoc::Doc(Doc::text(s))
@@ -1132,7 +1165,7 @@ where
 #[macro_export]
 macro_rules! docs {
     ($alloc: expr, $first: expr $(, $rest: expr)* $(,)?) => {{
-        let mut doc = $crate::DocBuilder($alloc, $first.into());
+        let mut doc = $crate::Pretty::pretty($first, $alloc);
         $(
             doc = doc.append($rest);
         )*
@@ -1145,6 +1178,27 @@ where
     A: 'a,
     D: ?Sized + DocAllocator<'a, A>,
 {
+    fn with_utf8_len(self) -> Self {
+        let s = match &*self {
+            Doc::OwnedText(s) => &s[..],
+            Doc::BorrowedText(s) => s,
+            Doc::SmallText(s) => s,
+            _ => return self,
+        };
+        use unicode_segmentation::UnicodeSegmentation;
+
+        if s.is_ascii() {
+            self
+        } else {
+            let grapheme_len = s.graphemes(true).count();
+            let DocBuilder(allocator, _) = self;
+            DocBuilder(
+                allocator,
+                Doc::RenderLen(grapheme_len, self.into_doc()).into(),
+            )
+        }
+    }
+
     /// Append the given document after this document.
     #[inline]
     pub fn append<E>(self, that: E) -> DocBuilder<'a, D, A>
@@ -1982,5 +2036,16 @@ mod tests {
             .render_raw(70, &mut TestWriter::new(FmtWrite::new(&mut s)))
             .unwrap();
         difference::assert_diff!(&s, "[[abc]]", "\n", 0);
+    }
+
+    #[test]
+    fn non_ascii_is_not_byte_length() {
+        let doc: BoxDoc<()> = BoxDoc::group(
+            BoxDoc::text("ÅÄÖ")
+                .append(BoxDoc::line())
+                .append(BoxDoc::text("test")),
+        );
+
+        test!(8, doc, "ÅÄÖ test");
     }
 }

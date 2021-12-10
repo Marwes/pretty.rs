@@ -382,6 +382,12 @@ where
                     // Newlines inside the group makes it not fit, but those outside lets it
                     // fit on the current line
                     Doc::Hardline => return mode == Mode::Break,
+                    Doc::RenderLen(len, _) => {
+                        pos += len;
+                        if pos > self.width {
+                            return false;
+                        }
+                    }
                     Doc::BorrowedText(ref str) => {
                         pos += str.len();
                         if pos > self.width {
@@ -471,6 +477,24 @@ where
                         write_newline(ind, out)?;
                         self.pos = ind;
                     }
+                    Doc::RenderLen(len, ref doc) => match **doc {
+                        Doc::OwnedText(ref s) => {
+                            out.write_str_all(s)?;
+                            self.pos += len;
+                            fits &= self.pos <= self.width;
+                        }
+                        Doc::BorrowedText(ref s) => {
+                            out.write_str_all(s)?;
+                            self.pos += len;
+                            fits &= self.pos <= self.width;
+                        }
+                        Doc::SmallText(ref s) => {
+                            out.write_str_all(s)?;
+                            self.pos += len;
+                            fits &= self.pos <= self.width;
+                        }
+                        _ => unreachable!(),
+                    },
                     Doc::OwnedText(ref s) => {
                         out.write_str_all(s)?;
                         self.pos += s.len();
