@@ -660,6 +660,19 @@ pub struct DocBuilder<'a, D, A = ()>(pub &'a D, pub BuildDoc<'a, D::Doc, A>)
 where
     D: ?Sized + DocAllocator<'a, A>;
 
+impl<'a, D, A> Deref for DocBuilder<'a, D, A>
+where
+    D: ?Sized + DocAllocator<'a, A>,
+{
+    type Target = Doc<'a, D::Doc, A>;
+    fn deref(&self) -> &Self::Target {
+        match &self.1 {
+            BuildDoc::DocPtr(d) => d,
+            BuildDoc::Doc(d) => d,
+        }
+    }
+}
+
 impl<'a, D, A> fmt::Debug for DocBuilder<'a, D, A>
 where
     D: ?Sized + DocAllocator<'a, A>,
