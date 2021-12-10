@@ -1144,8 +1144,8 @@ where
     }
 }
 
-/// Concatenates a number of documents (or values that can be converted into a document, like
-/// `&str`)
+/// Concatenates a number of documents (or values that can be converted into a document via the
+/// `Pretty` trait, like `&str`)
 ///
 /// ```
 /// use pretty::{docs, Arena, DocAllocator};
