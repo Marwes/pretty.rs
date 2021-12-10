@@ -288,7 +288,6 @@ where
     T: DocPtr<'a, A> + 'a,
     for<'b> W: RenderAnnotated<'b, A>,
     W: ?Sized,
-    Doc<'a, T, A>: std::fmt::Debug,
 {
     let temp_arena = &typed_arena::Arena::new();
     Best {
@@ -348,7 +347,6 @@ where
 impl<'d, 'a, T, A> Best<'d, 'a, T, A>
 where
     T: DocPtr<'a, A> + 'a,
-    Doc<'a, T, A>: std::fmt::Debug,
 {
     fn fitting(&mut self, next: &'d Doc<'a, T, A>, mut pos: usize, ind: usize) -> bool
     where
@@ -457,21 +455,9 @@ where
                         continue;
                     }
                     Doc::Group(ref doc) => {
-                        match mode {
-                            Mode::Flat => (),
-                            Mode::Break => {
-                                let fits = self.fitting(doc, self.pos, ind);
-                                log::trace!(
-                                    "Fits {} {} {}: {:#?} {:#?}",
-                                    fits,
-                                    self.pos,
-                                    self.width,
-                                    **doc,
-                                    self.bcmds,
-                                );
-                                if fits {
-                                    cmd.1 = Mode::Flat;
-                                }
+                        if let Mode::Break = mode {
+                            if self.fitting(doc, self.pos, ind) {
+                                cmd.1 = Mode::Flat;
                             }
                         }
                         cmd.2 = doc;

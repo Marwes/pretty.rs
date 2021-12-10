@@ -323,7 +323,7 @@ macro_rules! impl_doc {
             #[inline]
             pub fn append<D>(self, that: D) -> Self
             where
-                D: Into<BuildDoc<'a, Self, A>>,
+                D: Pretty<'a, $allocator, A>,
             {
                 DocBuilder(&$allocator, self.into()).append(that).into_doc()
             }
@@ -333,7 +333,7 @@ macro_rules! impl_doc {
             pub fn concat<I>(docs: I) -> Self
             where
                 I: IntoIterator,
-                I::Item: Into<BuildDoc<'a, Self, A>>,
+                I::Item: Pretty<'a, $allocator, A>,
             {
                 $allocator.concat(docs).into_doc()
             }
@@ -349,8 +349,8 @@ macro_rules! impl_doc {
             pub fn intersperse<I, S>(docs: I, separator: S) -> Self
             where
                 I: IntoIterator,
-                I::Item: Into<BuildDoc<'a, Self, A>>,
-                S: Into<BuildDoc<'a, Self, A>> + Clone,
+                I::Item: Pretty<'a, $allocator, A>,
+                S: Pretty<'a, $allocator, A> + Clone,
                 A: Clone,
             {
                 $allocator.intersperse(docs, separator).into_doc()
@@ -360,7 +360,7 @@ macro_rules! impl_doc {
             #[inline]
             pub fn flat_alt<D>(self, doc: D) -> Self
             where
-                D: Into<BuildDoc<'a, Self, A>>,
+                D: Pretty<'a, $allocator, A>,
             {
                 DocBuilder(&$allocator, self.into())
                     .flat_alt(doc)
@@ -535,9 +535,9 @@ where
 {
     fn flat_alt<D>(self, doc: D) -> Self
     where
-        D: Into<BuildDoc<'a, T, A>>,
+        D: Pretty<'a, T::Allocator, A>,
     {
-        DocBuilder(&T::ALLOCATOR, self.into()).flat_alt(doc).1
+        DocBuilder(T::ALLOCATOR, self).flat_alt(doc).1
     }
 }
 
@@ -547,9 +547,9 @@ where
 {
     fn flat_alt<D>(self, doc: D) -> Self
     where
-        D: Into<BuildDoc<'a, T, A>>,
+        D: Pretty<'a, T::Allocator, A>,
     {
-        DocBuilder(&T::ALLOCATOR, self.into())
+        DocBuilder(T::ALLOCATOR, self.into())
             .flat_alt(doc)
             .into_plain_doc()
     }
@@ -573,7 +573,7 @@ where
     }
 }
 
-pub struct Pretty<'a, 'd, T, A>
+pub struct PrettyFmt<'a, 'd, T, A>
 where
     A: 'a,
     T: DocPtr<'a, A> + 'a,
@@ -582,10 +582,9 @@ where
     width: usize,
 }
 
-impl<'a, T, A> fmt::Display for Pretty<'a, '_, T, A>
+impl<'a, T, A> fmt::Display for PrettyFmt<'a, '_, T, A>
 where
     T: DocPtr<'a, A>,
-    Doc<'a, T, A>: std::fmt::Debug,
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         self.doc.render_fmt(self.width, f)
@@ -595,7 +594,6 @@ where
 impl<'a, T, A> Doc<'a, T, A>
 where
     T: DocPtr<'a, A> + 'a,
-    Doc<'a, T, A>: std::fmt::Debug,
 {
     /// Writes a rendered document to a `std::io::Write` object.
     #[inline]
@@ -635,15 +633,15 @@ where
     /// assert_eq!(format!("{}", doc.pretty(80)), "hello world");
     /// ```
     #[inline]
-    pub fn pretty<'d>(&'d self, width: usize) -> Pretty<'a, 'd, T, A> {
-        Pretty { doc: self, width }
+    pub fn pretty<'d>(&'d self, width: usize) -> PrettyFmt<'a, 'd, T, A> {
+        PrettyFmt { doc: self, width }
     }
 }
 
 #[cfg(feature = "termcolor")]
 impl<'a, T> Doc<'a, T, ColorSpec>
 where
-    T: DocPtr<'a, ColorSpec> + std::fmt::Debug + 'a,
+    T: DocPtr<'a, ColorSpec> + 'a,
 {
     #[inline]
     pub fn render_colored<W>(&self, width: usize, out: W) -> io::Result<()>
@@ -715,6 +713,107 @@ where
 impl<'a, A> DocPtr<'a, A> for RefDoc<'a, A> {
     type ColumnFn = &'a (dyn Fn(usize) -> Self + 'a);
     type WidthFn = &'a (dyn Fn(isize) -> Self + 'a);
+}
+
+/// Trait for types which can be converted to a `Document`
+pub trait Pretty<'a, D, A = ()>
+where
+    A: 'a,
+    D: ?Sized + DocAllocator<'a, A>,
+{
+    /// Converts `self` into a document
+    fn pretty(self, allocator: &'a D) -> DocBuilder<'a, D, A>;
+}
+
+impl<'a, A> Pretty<'a, BoxAllocator, A> for BoxDoc<'a, A>
+where
+    A: 'a,
+{
+    fn pretty(self, allocator: &'a BoxAllocator) -> DocBuilder<'a, BoxAllocator, A> {
+        DocBuilder(allocator, self.into())
+    }
+}
+
+impl<'a, A> Pretty<'a, RcAllocator, A> for RcDoc<'a, A>
+where
+    A: 'a,
+{
+    fn pretty(self, allocator: &'a RcAllocator) -> DocBuilder<'a, RcAllocator, A> {
+        DocBuilder(allocator, self.into())
+    }
+}
+
+impl<'a, A> Pretty<'a, Arena<'a, A>, A> for RefDoc<'a, A>
+where
+    A: 'a,
+{
+    fn pretty(self, allocator: &'a Arena<'a, A>) -> DocBuilder<'a, Arena<'a, A>, A> {
+        DocBuilder(allocator, self.into())
+    }
+}
+
+impl<'a, D, A> Pretty<'a, D, A> for BuildDoc<'a, D::Doc, A>
+where
+    A: 'a,
+    D: ?Sized + DocAllocator<'a, A>,
+{
+    fn pretty(self, allocator: &'a D) -> DocBuilder<'a, D, A> {
+        DocBuilder(allocator, self)
+    }
+}
+
+impl<'a, D, A> Pretty<'a, D, A> for Doc<'a, D::Doc, A>
+where
+    A: 'a,
+    D: ?Sized + DocAllocator<'a, A>,
+{
+    fn pretty(self, allocator: &'a D) -> DocBuilder<'a, D, A> {
+        DocBuilder(allocator, self.into())
+    }
+}
+
+impl<'a, D, A> Pretty<'a, D, A> for DocBuilder<'a, D, A>
+where
+    A: 'a,
+    D: ?Sized + DocAllocator<'a, A>,
+{
+    fn pretty(self, _: &'a D) -> DocBuilder<'a, D, A> {
+        self
+    }
+}
+
+impl<'a, D, A, T> Pretty<'a, D, A> for Option<T>
+where
+    A: 'a,
+    D: ?Sized + DocAllocator<'a, A>,
+    T: Pretty<'a, D, A>,
+{
+    fn pretty(self, allocator: &'a D) -> DocBuilder<'a, D, A> {
+        match self {
+            Some(x) => x.pretty(allocator),
+            None => allocator.nil(),
+        }
+    }
+}
+
+impl<'a, D, A> Pretty<'a, D, A> for &'a str
+where
+    A: 'a,
+    D: ?Sized + DocAllocator<'a, A>,
+{
+    fn pretty(self, allocator: &'a D) -> DocBuilder<'a, D, A> {
+        allocator.text(self)
+    }
+}
+
+impl<'a, D, A> Pretty<'a, D, A> for String
+where
+    A: 'a,
+    D: ?Sized + DocAllocator<'a, A>,
+{
+    fn pretty(self, allocator: &'a D) -> DocBuilder<'a, D, A> {
+        allocator.text(self)
+    }
 }
 
 /// The `DocAllocator` trait abstracts over a type which can allocate (pointers to) `Doc`.
@@ -832,7 +931,7 @@ where
     fn concat<I>(&'a self, docs: I) -> DocBuilder<'a, Self, A>
     where
         I: IntoIterator,
-        I::Item: Into<BuildDoc<'a, Self::Doc, A>>,
+        I::Item: Pretty<'a, Self, A>,
     {
         docs.into_iter().fold(self.nil(), |a, b| a.append(b))
     }
@@ -848,8 +947,8 @@ where
     fn intersperse<I, S>(&'a self, docs: I, separator: S) -> DocBuilder<'a, Self, A>
     where
         I: IntoIterator,
-        I::Item: Into<BuildDoc<'a, Self::Doc, A>>,
-        S: Into<BuildDoc<'a, Self::Doc, A>> + Clone,
+        I::Item: Pretty<'a, Self, A>,
+        S: Pretty<'a, Self, A> + Clone,
     {
         let mut result = self.nil();
         let mut iter = docs.into_iter();
@@ -1041,24 +1140,31 @@ macro_rules! docs {
     }}
 }
 
-impl<'a, 's, D, A> DocBuilder<'a, D, A>
+impl<'a, D, A> DocBuilder<'a, D, A>
 where
+    A: 'a,
     D: ?Sized + DocAllocator<'a, A>,
 {
     /// Append the given document after this document.
     #[inline]
     pub fn append<E>(self, that: E) -> DocBuilder<'a, D, A>
     where
-        E: Into<BuildDoc<'a, D::Doc, A>>,
+        E: Pretty<'a, D, A>,
     {
-        let DocBuilder(allocator, this) = self;
-        let that = that.into();
-        let doc = match (&*this, &*that) {
+        let DocBuilder(allocator, _) = self;
+        let that = that.pretty(allocator);
+        match (&*self, &*that) {
             (Doc::Nil, _) => that,
-            (_, Doc::Nil) => this,
-            _ => Doc::Append(allocator.alloc_cow(this), allocator.alloc_cow(that)).into(),
-        };
-        DocBuilder(allocator, doc)
+            (_, Doc::Nil) => self,
+            _ => DocBuilder(
+                allocator,
+                Doc::Append(
+                    allocator.alloc_cow(self.into()).into(),
+                    allocator.alloc_cow(that.into()).into(),
+                )
+                .into(),
+            ),
+        }
     }
 
     /// Acts as `self` when laid out on multiple lines and acts as `that` when laid out on a single line.
@@ -1088,13 +1194,17 @@ where
     #[inline]
     pub fn flat_alt<E>(self, that: E) -> DocBuilder<'a, D, A>
     where
-        E: Into<BuildDoc<'a, D::Doc, A>>,
+        E: Pretty<'a, D, A>,
     {
         let DocBuilder(allocator, this) = self;
-        let that = that.into();
+        let that = that.pretty(allocator);
         DocBuilder(
             allocator,
-            Doc::FlatAlt(allocator.alloc_cow(this.into()), allocator.alloc_cow(that)).into(),
+            Doc::FlatAlt(
+                allocator.alloc_cow(this.into()),
+                allocator.alloc_cow(that.into()),
+            )
+            .into(),
         )
     }
 
@@ -1281,11 +1391,11 @@ where
     #[inline]
     pub fn enclose<E, F>(self, before: E, after: F) -> DocBuilder<'a, D, A>
     where
-        E: Into<BuildDoc<'a, D::Doc, A>>,
-        F: Into<BuildDoc<'a, D::Doc, A>>,
+        E: Pretty<'a, D, A>,
+        F: Pretty<'a, D, A>,
     {
         let DocBuilder(allocator, _) = self;
-        DocBuilder(allocator, before.into())
+        DocBuilder(allocator, before.pretty(allocator).1)
             .append(self)
             .append(after)
     }
