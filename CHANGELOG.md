@@ -1,3 +1,24 @@
+<a name="v0.11.0"></a>
+## v0.11.0 (2021-12-10)
+
+
+#### Features
+
+*   Use display width during rendering ([b88f123a](https://github.com/Marwes/pretty.rs/commit/b88f123a3dba6f2f269d4c9f38961765238983a8), closes [#67](https://github.com/Marwes/pretty.rs/issues/67))
+*   Introduce the Pretty trait ([84a41d3d](https://github.com/Marwes/pretty.rs/commit/84a41d3daf2adfb6d3d8aa5806e12ff26bd4e3b7))
+*   Implement Deref for DocBuilder ([97602f36](https://github.com/Marwes/pretty.rs/commit/97602f36aff8c0a3a5895a9d6348fea424a5fb2c))
+*   Implement Debug on DocBuilder ([05bc8b76](https://github.com/Marwes/pretty.rs/commit/05bc8b76e05fc8dd0fbd425987c5597dab8a860c))
+*   Debug print Line documents ([063052d5](https://github.com/Marwes/pretty.rs/commit/063052d5ac4ef484ab3988547fa373824ed975fd))
+*   Debug print sotfline_ docs in a shortform ([b64b8b37](https://github.com/Marwes/pretty.rs/commit/b64b8b37f5cb23830ce37ce0ee475af5a28998ed))
+*   Debug print sotfline docs in a shortform ([86915fea](https://github.com/Marwes/pretty.rs/commit/86915fea79ddcb02f1cc32f6f23229a3dbd9fee5))
+
+#### Performance
+
+*   convert empty text to Nil docs ([91931342](https://github.com/Marwes/pretty.rs/commit/91931342315c0500f93cfbf3f4f97f774d2192ae))
+*   No need to group on individual text components ([9a67247b](https://github.com/Marwes/pretty.rs/commit/9a67247b725380607d315e8117cf757eca5f0b82))
+
+
+
 <a name="v0.7.0"></a>
 ## v0.7.0 (2019-12-01)
 
