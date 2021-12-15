@@ -1,3 +1,13 @@
+<a name="v0.11.2"></a>
+### v0.11.2 (2021-12-15)
+
+
+#### Features
+
+*   Implement Add/AddAssign on DocBuilder ([45e085a4](https://github.com/Marwes/pretty.rs/commit/45e085a4bd5737c66be8654ab30dae2fd6aa5a08))
+
+
+
 <a name="v0.11.1"></a>
 ### v0.11.1 (2021-12-10)
 
