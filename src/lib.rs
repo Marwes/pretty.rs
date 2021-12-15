@@ -140,7 +140,13 @@
 #[cfg(feature = "termcolor")]
 pub extern crate termcolor;
 
-use std::{borrow::Cow, convert::TryInto, fmt, io, ops::Deref, rc::Rc};
+use std::{
+    borrow::Cow,
+    convert::TryInto,
+    fmt, io,
+    ops::{Add, AddAssign, Deref},
+    rc::Rc,
+};
 
 #[cfg(feature = "termcolor")]
 use termcolor::{ColorSpec, WriteColor};
@@ -157,7 +163,10 @@ pub use self::render::{FmtWrite, IoWrite, Render, RenderAnnotated};
 /// The `T` parameter is used to abstract over pointers to `Doc`. See `RefDoc` and `BoxDoc` for how
 /// it is used
 #[derive(Clone)]
-pub enum Doc<'a, T: DocPtr<'a, A>, A = ()> {
+pub enum Doc<'a, T, A = ()>
+where
+    T: DocPtr<'a, A>,
+{
     Nil,
     Append(T, T),
     Group(T),
@@ -174,6 +183,15 @@ pub enum Doc<'a, T: DocPtr<'a, A>, A = ()> {
     Column(T::ColumnFn),
     Nesting(T::ColumnFn),
     Fail,
+}
+
+impl<'a, T, A> Default for Doc<'a, T, A>
+where
+    T: DocPtr<'a, A>,
+{
+    fn default() -> Self {
+        Self::Nil
+    }
 }
 
 pub type SmallText = arrayvec::ArrayString<[u8; 22]>;
@@ -675,6 +693,27 @@ pub struct DocBuilder<'a, D, A = ()>(pub &'a D, pub BuildDoc<'a, D::Doc, A>)
 where
     D: ?Sized + DocAllocator<'a, A>;
 
+impl<'a, D, A, P> Add<P> for DocBuilder<'a, D, A>
+where
+    D: ?Sized + DocAllocator<'a, A>,
+    P: Pretty<'a, D, A>,
+{
+    type Output = DocBuilder<'a, D, A>;
+    fn add(self, other: P) -> Self::Output {
+        self.append(other)
+    }
+}
+
+impl<'a, D, A, P> AddAssign<P> for DocBuilder<'a, D, A>
+where
+    D: ?Sized + DocAllocator<'a, A>,
+    P: Pretty<'a, D, A>,
+{
+    fn add_assign(&mut self, other: P) {
+        *self = DocBuilder(self.0, std::mem::take(&mut self.1)).append(other)
+    }
+}
+
 impl<'a, D, A> Deref for DocBuilder<'a, D, A>
 where
     D: ?Sized + DocAllocator<'a, A>,
@@ -1062,6 +1101,15 @@ where
 {
     DocPtr(D),
     Doc(Doc<'a, D, A>),
+}
+
+impl<'a, D, A> Default for BuildDoc<'a, D, A>
+where
+    D: DocPtr<'a, A>,
+{
+    fn default() -> Self {
+        Self::Doc(Doc::default())
+    }
 }
 
 impl<'a, D, A> fmt::Debug for BuildDoc<'a, D, A>
