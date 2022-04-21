@@ -1,5 +1,0 @@
-language: rust
-cache: cargo
-script:
-- cargo test --no-default-features
-- cargo test --all-features --examples --benches
