@@ -1839,6 +1839,24 @@ mod tests {
     }
 
     #[test]
+    fn block_with_hardline_negative_nest() {
+        let doc: RcDoc<()> = RcDoc::group(
+            RcDoc::text("{")
+                .append(
+                    RcDoc::line()
+                        .append(RcDoc::text("test"))
+                        .append(RcDoc::hardline())
+                        .append(RcDoc::text("test"))
+                        .nest(-2),
+                )
+                .append(RcDoc::line())
+                .append(RcDoc::text("}")),
+        );
+
+        test!(10, doc, "{\ntest\ntest\n}");
+    }
+
+    #[test]
     fn line_comment() {
         let doc: BoxDoc<()> = BoxDoc::group(
             BoxDoc::text("{")
