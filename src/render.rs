@@ -470,7 +470,14 @@ where
                         continue;
                     }
                     Doc::Nest(off, ref doc) => {
-                        cmd = ((ind as isize).saturating_add(off) as usize, mode, doc);
+                        // Once https://doc.rust-lang.org/std/primitive.usize.html#method.saturating_add_signed is stable
+                        // this can be replaced
+                        let new_ind = if off >= 0 {
+                            ind.saturating_add(off as usize)
+                        } else {
+                            ind.saturating_sub(off.unsigned_abs())
+                        };
+                        cmd = (new_ind, mode, doc);
                         continue;
                     }
                     Doc::Hardline => {
