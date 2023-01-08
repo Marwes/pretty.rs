@@ -388,7 +388,7 @@ where
                             return false;
                         }
                     }
-                    Doc::BorrowedText(ref str) => {
+                    Doc::BorrowedText(str) => {
                         pos += str.len();
                         if pos > self.width {
                             return false;
@@ -490,7 +490,7 @@ where
                             self.pos += len;
                             fits &= self.pos <= self.width;
                         }
-                        Doc::BorrowedText(ref s) => {
+                        Doc::BorrowedText(s) => {
                             out.write_str_all(s)?;
                             self.pos += len;
                             fits &= self.pos <= self.width;
@@ -507,7 +507,7 @@ where
                         self.pos += s.len();
                         fits &= self.pos <= self.width;
                     }
-                    Doc::BorrowedText(ref s) => {
+                    Doc::BorrowedText(s) => {
                         out.write_str_all(s)?;
                         self.pos += s.len();
                         fits &= self.pos <= self.width;

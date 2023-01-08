@@ -20,7 +20,7 @@ impl<'a> Forest<'a> {
         D::Doc: Clone,
         A: Clone,
     {
-        if (self.0).len() == 0 {
+        if (self.0).is_empty() {
             allocator.nil()
         } else {
             allocator
@@ -39,10 +39,7 @@ impl<'a> Forest<'a> {
     {
         let forest = self.0;
         let separator = allocator.text(",").append(allocator.hardline());
-        allocator.intersperse(
-            forest.into_iter().map(|tree| tree.pretty(allocator)),
-            separator,
-        )
+        allocator.intersperse(forest.iter().map(|tree| tree.pretty(allocator)), separator)
     }
 }
 
