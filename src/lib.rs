@@ -1892,7 +1892,6 @@ mod tests {
         BoxDoc::softline().append(BoxDoc::nesting(move |n| {
             let doc = doc.clone();
             BoxDoc::column(move |c| {
-                log::trace!("{} == {}", n, c);
                 if n == c {
                     BoxDoc::text("  ").append(doc.clone()).nest(2)
                 } else {
