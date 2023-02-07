@@ -467,7 +467,7 @@ impl fmt::Write for FmtText {
     fn write_str(&mut self, s: &str) -> fmt::Result {
         match self {
             FmtText::Small(buf) => {
-                if let Err(_) = buf.try_push_str(s) {
+                if buf.try_push_str(s).is_err() {
                     let mut new_str = String::with_capacity(buf.len() + s.len());
                     new_str.push_str(buf);
                     new_str.push_str(s);
@@ -749,12 +749,12 @@ where
     }
 }
 
-impl<'a, D, A> Into<BuildDoc<'a, D::Doc, A>> for DocBuilder<'a, D, A>
+impl<'a, D, A> From<DocBuilder<'a, D, A>> for BuildDoc<'a, D::Doc, A>
 where
     D: ?Sized + DocAllocator<'a, A>,
 {
-    fn into(self) -> BuildDoc<'a, D::Doc, A> {
-        self.1
+    fn from(val: DocBuilder<'a, D, A>) -> Self {
+        val.1
     }
 }
 
@@ -1271,8 +1271,8 @@ where
             _ => DocBuilder(
                 allocator,
                 Doc::Append(
-                    allocator.alloc_cow(self.into()).into(),
-                    allocator.alloc_cow(that.into()).into(),
+                    allocator.alloc_cow(self.into()),
+                    allocator.alloc_cow(that.into()),
                 )
                 .into(),
             ),
@@ -1312,11 +1312,7 @@ where
         let that = that.pretty(allocator);
         DocBuilder(
             allocator,
-            Doc::FlatAlt(
-                allocator.alloc_cow(this.into()),
-                allocator.alloc_cow(that.into()),
-            )
-            .into(),
+            Doc::FlatAlt(allocator.alloc_cow(this), allocator.alloc_cow(that.into())).into(),
         )
     }
 
@@ -1572,7 +1568,7 @@ impl<'a, A> Deref for RefDoc<'a, A> {
     type Target = Doc<'a, RefDoc<'a, A>, A>;
 
     fn deref(&self) -> &Self::Target {
-        &self.0
+        self.0
     }
 }
 
@@ -1702,8 +1698,6 @@ impl<'a, A> DocAllocator<'a, A> for Arena<'a, A> {
 
 #[cfg(test)]
 mod tests {
-    use difference;
-
     use super::*;
 
     macro_rules! chain {
