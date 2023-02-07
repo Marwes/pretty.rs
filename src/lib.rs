@@ -1892,7 +1892,6 @@ mod tests {
         BoxDoc::softline().append(BoxDoc::nesting(move |n| {
             let doc = doc.clone();
             BoxDoc::column(move |c| {
-                log::trace!("{} == {}", n, c);
                 if n == c {
                     BoxDoc::text("  ").append(doc.clone()).nest(2)
                 } else {
@@ -1904,8 +1903,6 @@ mod tests {
 
     #[test]
     fn hang_lambda1() {
-        let _ = env_logger::try_init();
-
         let doc = chain![
             chain!["let", BoxDoc::line(), "x", BoxDoc::line(), "="].group(),
             nest_on_line(chain![
