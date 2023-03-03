@@ -270,9 +270,9 @@ where
 }
 
 macro_rules! impl_doc {
-    ($name: ident, $allocator: ident) => {
+    ($name: ident, $ptr: ident, $allocator: ident) => {
         #[derive(Clone)]
-        pub struct $name<'a, A = ()>(Box<Doc<'a, $name<'a, A>, A>>);
+        pub struct $name<'a, A = ()>($ptr<Doc<'a, $name<'a, A>, A>>);
 
         impl<'a, A> fmt::Debug for $name<'a, A>
         where
@@ -285,7 +285,7 @@ macro_rules! impl_doc {
 
         impl<'a, A> $name<'a, A> {
             pub fn new(doc: Doc<'a, $name<'a, A>, A>) -> $name<'a, A> {
-                $name(Box::new(doc))
+                $name($ptr::new(doc))
             }
         }
 
@@ -526,8 +526,8 @@ macro_rules! impl_doc_methods {
     };
 }
 
-impl_doc!(BoxDoc, BoxAllocator);
-impl_doc!(RcDoc, RcAllocator);
+impl_doc!(BoxDoc, Box, BoxAllocator);
+impl_doc!(RcDoc, Rc, RcAllocator);
 
 impl_doc_methods!(Doc ('a, D, A) where (D: DocPtr<'a, A>) where (D: StaticDoc<'a, A>));
 impl_doc_methods!(BuildDoc ('a, D, A) where (D: DocPtr<'a, A>) where (D: StaticDoc<'a, A>));
