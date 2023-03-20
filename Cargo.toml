@@ -14,13 +14,15 @@ edition = "2018"
 features = ["termcolor"]
 
 [dependencies]
+# The newer versions of arrayvec are larger due to forced u32 lengths, would need to drop down Smalltext to 16 bytes
+# to not see any size increase so I'd rather stick with the older version for now
 arrayvec = "0.5"
 typed-arena = "2.0.0"
 termcolor = { version = "1.1.0", optional = true }
 unicode-segmentation = "1"
 
 [dev-dependencies]
-criterion = "0.3"
+criterion = "0.4"
 difference = "2"
 tempfile = "3.1.0"
 
