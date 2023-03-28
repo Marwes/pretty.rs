@@ -1,6 +1,6 @@
 # pretty.rs
 
-![build](https://github.com/Marwes/pretty.rs/actions/workflows/build.yml/badge.svg)
+[![build](https://github.com/Marwes/pretty.rs/actions/workflows/build.yml/badge.svg)](https://github.com/Marwes/pretty.rs/actions/workflows/build.yml)
 [![Docs](https://docs.rs/pretty/badge.svg)](https://docs.rs/pretty)
 
 Pretty printing combinators for Rust
