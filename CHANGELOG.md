@@ -6,6 +6,9 @@
 
 *   Add the BlockDoc formatter ([d4106e4e](https://github.com/Marwes/pretty.rs/commit/d4106e4e28d826755d36028d0cc57769d1261e44))
 
+#### Bug Fixes
+
+* Make `RcDoc` a wrapper around `Rc<Doc>`, not `Box<Doc>`
 
 
 <a name="v0.11.3"></a>
