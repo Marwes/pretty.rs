@@ -151,7 +151,7 @@ use std::{
 #[cfg(feature = "termcolor")]
 use termcolor::{ColorSpec, WriteColor};
 
-mod block;
+pub mod block;
 mod render;
 
 pub use self::block::{Affixes, BlockDoc};
@@ -1224,7 +1224,10 @@ where
 /// ```
 #[macro_export]
 macro_rules! docs {
-    ($alloc: expr, $first: expr $(, $rest: expr)* $(,)?) => {{
+    ($alloc: expr, $first: expr $(,)?) => {
+        $crate::Pretty::pretty($first, $alloc)
+    };
+    ($alloc: expr, $first: expr $(, $rest: expr)+ $(,)?) => {{
         let mut doc = $crate::Pretty::pretty($first, $alloc);
         $(
             doc = doc.append($rest);

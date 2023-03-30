@@ -1,4 +1,8 @@
-use super::*;
+//! Document formatting of "blocks" such as where some number of prefixes and suffixes would
+//! ideally be layed out onto a single line instead of breaking them up into multiple lines. See
+//! `BlockDoc` for an example
+
+use crate::{docs, Doc, DocAllocator, DocBuilder};
 
 pub struct Affixes<'doc, D, A>
 where
@@ -42,7 +46,35 @@ where
     }
 }
 
-/// Formats a set of `prefix` and `suffix` documents around a body
+/// Formats a set of `prefix` and `suffix` documents around a `body`
+///
+/// The following document split into the prefixes [\x y ->, \z ->, {], suffixes [nil, nil, }] and
+/// body [result: x + y - z] will try to be formatted
+///
+/// ```gluon
+/// \x y -> \z -> { result: x + y - z }
+/// ```
+///
+/// ```gluon
+/// \x y -> \z -> {
+///     result: x + y - z
+/// }
+/// ```
+///
+/// ```gluon
+/// \x y -> \z ->
+///     {
+///         result: x + y - z
+///     }
+/// ```
+///
+/// ```gluon
+/// \x y ->
+///     \z ->
+///         {
+///             result: x + y - z
+///         }
+/// ```
 pub struct BlockDoc<'doc, D, A>
 where
     D: DocAllocator<'doc, A>,
@@ -57,10 +89,9 @@ where
     D::Doc: Clone,
     A: Clone,
 {
-    pub fn format(mut self, nest: isize) -> DocBuilder<'doc, D, A> {
+    pub fn format(self, nest: isize) -> DocBuilder<'doc, D, A> {
         let arena = self.body.0;
 
-        self.affixes.reverse();
         let fail_on_multi_line = arena.fail().flat_alt(arena.nil());
 
         (1..self.affixes.len() + 1)
@@ -122,5 +153,49 @@ where
                 })
             })
             .unwrap_or(self.body)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    use crate::Arena;
+
+    #[test]
+    fn format_block() {
+        let arena = &Arena::<()>::new();
+        let mk_doc = || BlockDoc {
+            affixes: vec![
+                Affixes::new(docs![arena, "\\x y ->"], arena.nil()).nest(),
+                Affixes::new(docs![arena, arena.line(), "\\z ->"], arena.nil()).nest(),
+                Affixes::new(
+                    docs![arena, arena.line(), "{"],
+                    docs![arena, arena.line(), "}"],
+                )
+                .nest(),
+            ],
+            body: docs![arena, arena.line(), "result"],
+        };
+        expect_test::expect![[r#"\x y -> \z -> { result }"#]]
+            .assert_eq(&mk_doc().format(4).1.pretty(40).to_string());
+        expect_test::expect![[r#"
+\x y -> \z -> {
+    result
+}"#]]
+        .assert_eq(&mk_doc().format(4).1.pretty(15).to_string());
+        expect_test::expect![[r#"
+\x y -> \z ->
+    {
+        result
+    }"#]]
+        .assert_eq(&mk_doc().format(4).1.pretty(14).to_string());
+        expect_test::expect![[r#"
+\x y ->
+    \z ->
+        {
+            result
+        }"#]]
+        .assert_eq(&mk_doc().format(4).1.pretty(12).to_string());
     }
 }
