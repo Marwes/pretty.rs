@@ -1,3 +1,13 @@
+<a name="v0.12.0"></a>
+## v0.12.0 (2023-03-30)
+
+
+#### Features
+
+*   Add the BlockDoc formatter ([d4106e4e](https://github.com/Marwes/pretty.rs/commit/d4106e4e28d826755d36028d0cc57769d1261e44))
+
+
+
 <a name="v0.11.3"></a>
 ### v0.11.3 (2022-04-21)
 
