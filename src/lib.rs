@@ -151,8 +151,10 @@ use std::{
 #[cfg(feature = "termcolor")]
 use termcolor::{ColorSpec, WriteColor};
 
+mod block;
 mod render;
 
+pub use self::block::{Affixes, BlockDoc};
 #[cfg(feature = "termcolor")]
 pub use self::render::TermColored;
 pub use self::render::{FmtWrite, IoWrite, Render, RenderAnnotated};
