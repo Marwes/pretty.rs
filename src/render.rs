@@ -348,10 +348,7 @@ impl<'d, 'a, T, A> Best<'d, 'a, T, A>
 where
     T: DocPtr<'a, A> + 'a,
 {
-    fn fitting(&mut self, next: &'d Doc<'a, T, A>, mut pos: usize, ind: usize) -> bool
-    where
-        T: DocPtr<'a, A>,
-    {
+    fn fitting(&mut self, next: &'d Doc<'a, T, A>, mut pos: usize, ind: usize) -> bool {
         let mut bidx = self.bcmds.len();
         self.fcmds.clear(); // clear from previous calls from best
         self.fcmds.push(next);
@@ -481,8 +478,17 @@ where
                         continue;
                     }
                     Doc::Hardline => {
-                        write_newline(ind, out)?;
-                        self.pos = ind;
+                        // The next document may have different indentation so we should use it if
+                        // we can
+                        if let Some(next) = self.bcmds.pop() {
+                            write_newline(next.0, out)?;
+                            self.pos = next.0;
+                            cmd = next;
+                            continue;
+                        } else {
+                            write_newline(ind, out)?;
+                            self.pos = ind;
+                        }
                     }
                     Doc::RenderLen(len, ref doc) => match **doc {
                         Doc::OwnedText(ref s) => {

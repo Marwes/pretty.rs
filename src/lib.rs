@@ -1384,12 +1384,18 @@ where
     /// like `RefDoc` or `RcDoc`
     ///
     /// ```rust
-    /// use pretty::DocAllocator;
+    /// use pretty::{docs, DocAllocator};
     ///
-    /// let arena = pretty::Arena::<()>::new();
-    /// let doc = arena.text("lorem").append(arena.text(" "))
-    ///     .append(arena.intersperse(["ipsum", "dolor"].iter().cloned(), arena.line_()).align());
-    /// assert_eq!(doc.1.pretty(80).to_string(), "lorem ipsum\n      dolor");
+    /// let arena = &pretty::Arena::<()>::new();
+    /// let doc = docs![
+    ///     arena,
+    ///     "lorem",
+    ///     " ",
+    ///     arena.intersperse(["ipsum", "dolor"].iter().cloned(), arena.line_()).align(),
+    ///     arena.hardline(),
+    ///     "next",
+    /// ];
+    /// assert_eq!(doc.1.pretty(80).to_string(), "lorem ipsum\n      dolor\nnext");
     /// ```
     #[inline]
     pub fn align(self) -> DocBuilder<'a, D, A>
