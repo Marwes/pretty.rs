@@ -1,3 +1,13 @@
+<a name="v0.12.1"></a>
+### v0.12.1 (2023-04-19)
+
+
+#### Bug Fixes
+
+*   Don't leak the indentation of earlier documents into latter ones ([430bb457](https://github.com/Marwes/pretty.rs/commit/430bb4571f77362c45451063aba728d232503677))
+
+
+
 <a name="v0.12.0"></a>
 ## v0.12.0 (2023-03-30)
 
