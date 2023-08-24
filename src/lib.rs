@@ -1248,16 +1248,16 @@ where
             Doc::SmallText(s) => s,
             _ => return self,
         };
-        use unicode_segmentation::UnicodeSegmentation;
 
         if s.is_ascii() {
             self
         } else {
-            let grapheme_len = s.graphemes(true).count();
+            let display_width = unicode_width::UnicodeWidthStr::width(s);
+
             let DocBuilder(allocator, _) = self;
             DocBuilder(
                 allocator,
-                Doc::RenderLen(grapheme_len, self.into_doc()).into(),
+                Doc::RenderLen(display_width, self.into_doc()).into(),
             )
         }
     }
@@ -2125,5 +2125,16 @@ mod tests {
         );
 
         test!(8, doc, "ÅÄÖ test");
+    }
+
+    #[test]
+    fn cjk_display_width() {
+        let arena = Arena::<()>::new();
+        let doc = arena
+            .text("你好")
+            .append(arena.line().append(arena.text("abc")).align())
+            .into_doc();
+
+        test!(doc, "你好\n    abc");
     }
 }
