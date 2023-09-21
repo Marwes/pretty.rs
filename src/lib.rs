@@ -884,6 +884,22 @@ where
     }
 }
 
+impl<'a, D, A, S> Pretty<'a, D, A> for Cow<'a, S>
+where
+    A: 'a,
+    D: ?Sized + DocAllocator<'a, A>,
+    S: ?Sized + ToOwned,
+    &'a S: Pretty<'a, D, A>,
+    S::Owned: Pretty<'a, D, A>,
+{
+    fn pretty(self, allocator: &'a D) -> DocBuilder<'a, D, A> {
+        match self {
+            Cow::Borrowed(s) => s.pretty(allocator),
+            Cow::Owned(s) => s.pretty(allocator),
+        }
+    }
+}
+
 /// The `DocAllocator` trait abstracts over a type which can allocate (pointers to) `Doc`.
 pub trait DocAllocator<'a, A = ()>
 where
@@ -2136,5 +2152,19 @@ mod tests {
             .into_doc();
 
         test!(doc, "你好\n    abc");
+    }
+
+    #[test]
+    fn pretty_cow() {
+        let doc: BoxDoc<()> = docs![
+            &BoxAllocator,
+            Cow::<str>::Borrowed("abc"),
+            BoxDoc::line(),
+            Cow::<str>::Owned("123".to_string()),
+        ]
+        .group()
+        .into_doc();
+
+        test!(8, doc, "abc 123");
     }
 }
