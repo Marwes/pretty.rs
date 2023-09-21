@@ -1,3 +1,13 @@
+<a name="v0.12.3"></a>
+### v0.12.3 (2023-09-21)
+
+
+#### Features
+
+*   Implement Pretty for Cow ([5897df33](https://github.com/Marwes/pretty.rs/commit/5897df33008890d434d2948f6c3c0f692c70eeae))
+
+
+
 <a name="v0.12.2"></a>
 ### v0.12.2 (2023-09-21)
 
