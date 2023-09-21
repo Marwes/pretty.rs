@@ -1,3 +1,13 @@
+<a name="v0.12.2"></a>
+### v0.12.2 (2023-09-21)
+
+
+#### Bug Fixes
+
+*   CJK characters display width ([d1cdc4ef](https://github.com/Marwes/pretty.rs/commit/d1cdc4ef961864743e66bd245985549d58228aaf))
+
+
+
 <a name="v0.12.1"></a>
 ### v0.12.1 (2023-04-19)
 
