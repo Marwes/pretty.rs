@@ -1,3 +1,11 @@
+<a name="v0.12.4"></a>
+### v0.12.4 (2025-03-14)
+
+
+#### Features
+
+*   Avoid stack overflow on right-biased append docs
+
 <a name="v0.12.3"></a>
 ### v0.12.3 (2023-09-21)
 
