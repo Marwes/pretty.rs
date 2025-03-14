@@ -274,8 +274,7 @@ where
         // to push and directly pop `Append` documents)
         match doc {
             Doc::Append(l, r) => {
-                let d = append_docs(r, consumer);
-                consumer(d);
+                consumer(r);
                 doc = l;
             }
             _ => return doc,
